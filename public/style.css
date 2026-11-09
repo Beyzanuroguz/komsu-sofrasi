@@ -144,3 +144,11 @@ form input,select,textarea{width:100%;min-width:0;border:1px solid #aeb5a8;backg
 .test-banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#e5ead9;padding:10px 14px;border-radius:12px;margin:18px 0;font-size:14px}
 .test-banner button{margin-left:auto}
 @media(max-width:680px){.test-signin{grid-template-columns:1fr;padding:22px}}
+
+.hero-actions,.listing-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hero-actions .pill{padding:10px 14px}
+.listing-actions{justify-content:flex-end}
+.seller-listing{align-items:start}
+.listing-status{display:block;color:var(--muted);font-weight:700;margin-top:4px}
+.listing-active{color:var(--green)}
+.empty-catalog{grid-column:1/-1;padding:20px}

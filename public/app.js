@@ -20,7 +20,7 @@ const orderActions = {
 };
 const scheduleDate = new Intl.DateTimeFormat("tr-TR", {dateStyle:"long", timeZone:"UTC"});
 const cartKey = "komsu-sofrasi-market-cart" + (testRole ? "-" + testRole : "");
-const state = {products:[], customerOrders:[], sellerOrders:[], account:null, cart:{}};
+const state = {products:[], sellerProducts:[], customerOrders:[], sellerOrders:[], testAvailable:false, account:null, cart:{}};
 let cartDraft = {};
 let checkoutId = "";
 try {
@@ -185,6 +185,9 @@ function renderCatalog() {
         <button class="pill" data-bulk="${p.id}" aria-label="${escape(p.name + " · " + label)}" ${!own && available >= step ? "" : "disabled"}>${label}</button></div></div>
     </article>`;
   }).join("");
+  if (shopReady && !listings.length && !testRole) {
+    byId("catalog").innerHTML = '<div class="panel empty-catalog"><h3>Yerel mutfaklar burada yer alacak</h3><p class="muted">Ev yapımı ürünlerini satmak için bir mutfak açabilir, ürünlerini hazır olduğunda yayımlayabilirsin.</p><button type="button" class="button" data-view="seller">Üretici paneline git</button></div>';
+  }
 }
 
 function refreshSchedule() {
@@ -271,6 +274,8 @@ function render() {
   byId("test-banner").hidden = !testRole || !account;
   byId("test-account-label").textContent = testBuyer ? "Müşteri test hesabı" : "Üretici test hesabı";
   byId("test-attribution").hidden = !testRole;
+  byId("test-link").hidden = !state.testAvailable;
+  byId("join-seller").hidden = Boolean(testRole);
   byId("test-link").textContent = testBuyer ? "Üretici testine geç" : testSeller ? "Müşteri testine geç" : "Test alanı";
   byId("test-link").href = testBuyer ? "/test/uretici/" : "/test/musteri/";
   byId("shop-nav").hidden = testSeller || Boolean(testRole && !account);
@@ -285,8 +290,11 @@ function render() {
   byId("kitchen-form").hidden = !account || Boolean(kitchen);
   byId("seller-workspace").hidden = !kitchen;
   byId("new-product").hidden = !kitchen;
-  byId("inventory").innerHTML = kitchen ? state.products.filter(p => p.sellerId === kitchen.id).map(p =>
-    `<div class="inventory-row"><div><b>${escape(p.name)}</b><br><small>${quantityLabel(p.stock, p)} stok · ${money(unitPrice(p))} / ${unitOf(p)}</small></div><button class="pill" data-edit="${p.id}">Düzenle</button></div>`).join("") || '<p class="muted">Menünde henüz ürün yok.</p>' : "";
+  byId("inventory").innerHTML = kitchen ? state.sellerProducts.map(p =>
+    `<div class="inventory-row seller-listing"><div><b>${escape(p.name)}</b><br><small>${quantityLabel(p.stock, p)} stok · ${money(unitPrice(p))} / ${unitOf(p)}</small>
+    <small class="listing-status ${p.active ? "listing-active" : ""}">${p.active ? "Satışta" : "Satışa kapalı"}</small></div>
+    <div class="listing-actions"><button class="pill" data-edit="${p.id}">Düzenle</button>
+    <button class="pill" data-visibility="${p.id}" data-active="${!p.active}">${p.active ? "Satışı durdur" : "Satışa aç"}</button></div></div>`).join("") || '<p class="muted">Menünde henüz ürün yok.</p>' : "";
   renderSellerOrders();
   byId("orders-account").innerHTML = shopReady && !account ? `<div class="account-gate">Sipariş vermek ve geçmiş siparişlerini görmek için giriş yap. ${signIn("orders", "Müşteri girişi")}</div>` : "";
   byId("order-history").hidden = !account;
@@ -361,6 +369,7 @@ function openProduct(product) {
   renderProductPhoto();
   renderProductPoint();
   byId("product-title").textContent = product ? "Ürünü düzenle" : "Ürün ekle";
+  byId("draft-note").hidden = Boolean(product);
   byId("product-dialog").showModal();
 }
 
@@ -604,9 +613,10 @@ document.addEventListener("click", event => {
   if (data.add) changeQuantity(data.add, quantityStep(findProduct(data.add) ?? {}));
   if (data.minus) changeQuantity(data.minus, -quantityStep(findProduct(data.minus) ?? {}));
   if (data.edit && state.account?.kitchen) {
-    const product = findProduct(data.edit);
+    const product = state.sellerProducts.find(item => item.id === data.edit);
     if (product?.sellerId === state.account.kitchen.id) openProduct(product);
   }
+  if (data.visibility) void changeVisibility(button);
   if (data.order) void changeOrder(button);
   if ("close" in data) button.closest("dialog").close();
 });
@@ -643,7 +653,7 @@ byId("product-form").addEventListener("submit", async event => {
     await api("product", body);
     byId("product-dialog").close();
     await syncShop();
-    notify("Ürün kaydedildi.");
+    notify(previous ? "Ürün kaydedildi." : "Ürün taslak olarak kaydedildi. Menüm bölümünden satışa açabilirsin.");
   } catch (error) {
     notify(error.message);
   } finally {
@@ -685,6 +695,21 @@ byId("checkout").addEventListener("submit", async event => {
     renderCart();
   }
 });
+
+async function changeVisibility(button) {
+  if (button.disabled) return;
+  const active = button.dataset.active === "true";
+  button.disabled = true;
+  try {
+    await api("product-visibility", {id:button.dataset.visibility, active});
+    await syncShop();
+    notify(active ? "Ürün satışa açıldı." : "Ürün satışa kapatıldı.");
+  } catch (error) {
+    notify(error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
 
 async function changeOrder(button) {
   if (button.disabled) return;

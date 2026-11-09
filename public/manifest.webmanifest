@@ -1,0 +1,13 @@
+{
+  "id": "/",
+  "name": "Komşu Sofrası",
+  "short_name": "Komşu Sofrası",
+  "description": "Yerel üreticilerden ev yapımı yemek sipariş et.",
+  "lang": "tr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f9f6ee",
+  "theme_color": "#234537",
+  "icons": [{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}

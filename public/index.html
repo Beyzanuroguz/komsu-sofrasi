@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Ev yapımı yemek ve tatlıları keşfet, yerel üreticilerden sipariş ver.">
 <title>Komşu Sofrası • Evden sofrana</title>
+<meta name="theme-color" content="#234537">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="stylesheet" href="/style.css">
 <script type="module" src="/app.js"></script>
 </head>
@@ -12,7 +15,7 @@
 <header><div class="bar wrap">
 <button class="brand" data-view="shop"><span class="logo" aria-hidden="true">♨</span><span>Komşu Sofrası<small>EVDEN SOFRANA</small></span></button>
 <nav aria-label="Ana menü"><button data-view="shop" id="shop-nav" aria-current="page">Keşfet</button><button data-view="orders" id="customer-nav">Müşteri girişi</button><button data-view="seller" id="seller-nav">Üretici paneli</button><button id="account-button">Giriş yap</button><button class="dark" id="cart-button">Sepet <span id="count">0</span></button>
-<a href="/test/musteri/" class="test-link" id="test-link">Test alanı</a></nav>
+<a href="/test/musteri/" class="test-link" id="test-link" hidden>Test alanı</a></nav>
 </div></header>
 <main id="main" class="wrap">
 <section id="test-signin" class="test-signin" aria-labelledby="test-title" hidden>
@@ -27,7 +30,7 @@
 <p id="sync-status" class="muted sync-status" role="status" hidden></p>
 <section id="shop">
 <div class="hero">
-<div class="hero-copy"><span class="eyebrow"><i></i> YEREL MUTFAKLARDAN</span><h1>Ev yapımı.<br><em>Komşu tadında.</em></h1><p>Mahallendeki üreticilerin özenle hazırladığı yemekleri keşfet. Mantıdan baklavaya, sevdiğin lezzetler sofrana gelsin.</p><a class="button" href="#menu">Menüyü keşfet <span aria-hidden="true">↓</span></a></div>
+<div class="hero-copy"><span class="eyebrow"><i></i> YEREL MUTFAKLARDAN</span><h1>Ev yapımı.<br><em>Komşu tadında.</em></h1><p>Mahallendeki üreticilerin özenle hazırladığı yemekleri keşfet. Mantıdan baklavaya, sevdiğin lezzetler sofrana gelsin.</p><div class="hero-actions"><a class="button" href="#menu">Menüyü keşfet <span aria-hidden="true">↓</span></a><button type="button" id="join-seller" class="pill" data-view="seller">Mutfağını aç</button></div></div>
 <div class="hero-photo" role="img" aria-label="Ev yapımı mantı, yaprak sarma ve baklava"><span>Komşunun mutfağından</span></div>
 </div>
 <section id="menu" aria-labelledby="menu-title">
@@ -61,7 +64,7 @@
 <p class="muted form-note">Bu bilgi yalnızca onaylanan elden teslim siparişinin müşterisine gösterilir.</p>
 <button class="button" id="create-kitchen">Mutfağı aç</button>
 </form>
-<div class="seller-grid" id="seller-workspace" hidden><section class="panel"><h2>Gelen siparişler</h2><div id="seller-orders"></div></section><section class="panel"><h2>Menüm</h2><p class="muted form-note">Burada kendi ürünlerini düzenleyebilirsin.</p><div id="inventory"></div></section></div>
+<div class="seller-grid" id="seller-workspace" hidden><section class="panel"><h2>Gelen siparişler</h2><div id="seller-orders"></div></section><section class="panel"><h2>Menüm</h2><p class="muted form-note">Taslaklarını düzenle, hazır olan ürünleri satışa aç.</p><div id="inventory"></div></section></div>
 </section>
 </main>
 <footer class="wrap"><b>Komşu Sofrası</b><span>Yerel mutfaklardan sofrana</span><a id="test-attribution" href="/test-media/ATTRIBUTION.md" hidden>Fotoğraf kaynakları</a></footer>
@@ -105,6 +108,7 @@
 <div class="location-actions"><button type="button" class="pill" id="set-product-location">Şu anki konumu ekle</button><button type="button" class="pill" id="clear-product-location" hidden>Konumu kaldır</button></div>
 <p id="product-location-status" class="muted form-note" role="status">Yakındaki aramalarda çıkmak için teslim noktasında konum ekleyebilirsin.</p>
 </fieldset>
+<p class="muted form-note" id="draft-note">Yeni ürünler taslak olarak kaydedilir. Menüm bölümünden satışa açabilirsin.</p>
 <button class="button wide" id="save-product">Ürünü kaydet</button>
 </form>
 </dialog>

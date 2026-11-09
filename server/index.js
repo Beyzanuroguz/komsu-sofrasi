@@ -77,19 +77,22 @@ function productView(p) {
     price:p.price_cents / 100, stock:p.stock, unit:p.unit, details:p.details,
     district:p.district, neighborhood:p.neighborhood, revision:p.revision,
     point:p.latitude == null ? null : {lat:p.latitude, lng:p.longitude},
-    photo:photoPath(p.photo_key),
+    photo:photoPath(p.photo_key), active:Boolean(p.is_active),
   };
 }
 
-async function marketplace(db, actor) {
+async function marketplace(db, actor, testAvailable) {
   const [kitchen, products, orders] = await Promise.all([
     kitchenFor(db, actor),
     rowList(db.prepare(`SELECT p.*, k.name maker FROM products p JOIN kitchens k ON k.id=p.kitchen_id
-      WHERE (p.kitchen_id = ?) = ? ORDER BY p.created_at DESC, p.id`).bind(testKitchen, actor?.test ? 1 : 0)),
+      WHERE p.is_active=1 AND (p.kitchen_id = ?) = ? ORDER BY p.created_at DESC, p.id`).bind(testKitchen, actor?.test ? 1 : 0)),
     actor ? rowList(db.prepare(`SELECT o.*, k.name maker, k.pickup_note, k.owner_id
       FROM orders o JOIN kitchens k ON k.id=o.kitchen_id
       WHERE o.customer_id=? OR k.owner_id=? ORDER BY o.created_at DESC, o.id`).bind(actor.id, actor.id)) : [],
   ]);
+  const sellerProducts = kitchen ? await rowList(db.prepare(`SELECT p.*, k.name maker
+    FROM products p JOIN kitchens k ON k.id=p.kitchen_id WHERE p.kitchen_id=? ORDER BY p.created_at DESC, p.id`)
+    .bind(kitchen.id)) : [];
   const items = new Map();
   if (orders.length) {
     const rows = await rowList(db.prepare(`SELECT i.* FROM order_items i JOIN orders o ON o.id=i.order_id
@@ -110,6 +113,8 @@ async function marketplace(db, actor) {
   return {
     account:actor ? {name:actor.name, kitchen, test:actor.test ?? null} : null,
     products:products.map(productView),
+    sellerProducts:sellerProducts.map(productView),
+    testAvailable,
     customerOrders:orders.filter(o => o.customer_id === actor.id).map(o => orderView(o, false)),
     sellerOrders:orders.filter(o => o.owner_id === actor.id).map(o => orderView(o, true)),
   };
@@ -172,7 +177,7 @@ async function saveProduct(env, actor, body) {
           neighborhood=?,latitude=?,longitude=?,photo_key=?,revision=? WHERE id=? AND kitchen_id=? AND revision=? AND stock=?`)
         .bind(...values, product.id, kitchen.id, product.revision, body.originalStock).run()
       : await db.prepare(`INSERT INTO products (id,kitchen_id,name,category,price_cents,stock,unit,details,district,
-          neighborhood,latitude,longitude,photo_key,revision) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+          neighborhood,latitude,longitude,photo_key,revision,is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`)
         .bind(uid(), kitchen.id, ...values).run();
     if (!result.meta.changes) fail(409, "Ürün veya stok değişti. Paneli yenileyip tekrar dene.");
   } catch (error) {
@@ -181,6 +186,14 @@ async function saveProduct(env, actor, body) {
     throw error;
   }
   if (product?.photo_key && !staticPhotos[product.photo_key] && product.photo_key !== photoKey) await env.BUCKET.delete(product.photo_key).catch(() => {});
+  return json({ok:true});
+}
+
+async function setListingVisibility(db, actor, body) {
+  if (!validId(body.id) || typeof body.active !== "boolean") fail(400, "Ürün bilgisi geçersiz.");
+  const result = await db.prepare(`UPDATE products SET is_active=?,revision=? WHERE id=? AND kitchen_id IN
+    (SELECT id FROM kitchens WHERE owner_id=?)`).bind(body.active ? 1 : 0, uid(), body.id, actor.id).run();
+  if (!result.meta.changes) fail(404, "Ürün bulunamadı.");
   return json({ok:true});
 }
 
@@ -210,7 +223,7 @@ async function placeOrder(db, actor, body) {
   const groups = new Map();
   for (const item of items) {
     const product = byId.get(item.id);
-    if (!product || (product.kitchen_id === testKitchen) !== Boolean(actor.test) || product.revision !== item.revision || product.stock < item.qty) fail(409, "Bir ürünün fiyatı, birimi veya stoğu değişti. Sepeti kontrol et.");
+    if (!product?.is_active || (product.kitchen_id === testKitchen) !== Boolean(actor.test) || product.revision !== item.revision || product.stock < item.qty) fail(409, "Bir ürünün fiyatı, birimi veya stoğu değişti. Sepeti kontrol et.");
     if (!validQuantity(item.qty, product) || item.qty <= 0) fail(400, "Sepetindeki miktarları kontrol et.");
     if (product.owner_id === actor.id) fail(400, "Kendi mutfağından sipariş veremezsin.");
     if (!groups.has(product.kitchen_id)) groups.set(product.kitchen_id, []);
@@ -254,9 +267,15 @@ async function changeOrder(db, actor, body) {
   return json({ok:true});
 }
 
-async function servePhoto(env, path) {
+async function servePhoto(env, path, actor, allowTest) {
   const name = path.slice("/photos/".length);
   if (!/^[a-f0-9-]{36}\.jpg$/.test(name)) fail(404, "Fotoğraf bulunamadı.");
+  const product = await env.DB.prepare(`SELECT p.is_active, p.kitchen_id, k.owner_id FROM products p
+    JOIN kitchens k ON k.id=p.kitchen_id WHERE p.photo_key=?`).bind(name).first();
+  if (!product || (product.kitchen_id === testKitchen && !allowTest) ||
+      (!product.is_active && product.owner_id !== actor?.id && !(allowTest && product.kitchen_id === testKitchen))) {
+    fail(404, "Fotoğraf bulunamadı.");
+  }
   const photo = await env.BUCKET.get(name);
   if (!photo) fail(404, "Fotoğraf bulunamadı.");
   return new Response(photo.body, {headers:{"Content-Type":"image/jpeg","Cache-Control":"private, max-age=3600","X-Content-Type-Options":"nosniff"}});
@@ -273,9 +292,11 @@ export default {
     let path = new URL(request.url).pathname;
     try {
       let actor = identity(request);
+      const visitorEmail = request.headers.get("oai-authenticated-user-email")?.trim().toLowerCase();
+      const allowTest = Boolean(actor && env.TEST_OWNER_EMAIL && visitorEmail === env.TEST_OWNER_EMAIL);
       const test = /^\/test\/(musteri|uretici)(\/.*)?$/.exec(path);
       if (test) {
-        if (!actor) fail(401, "Test alanına erişmek için önce siteye giriş yap.");
+        if (!allowTest) fail(404, "Sayfa bulunamadı.");
         const role = test[1];
         path = test[2] || "/";
         if (!test[2] && request.method === "GET") return Response.redirect(new URL(request.url).origin + "/test/" + role + "/", 302);
@@ -291,21 +312,22 @@ export default {
         }
         actor = await readTestActor(env, actor, role, request.headers.get("Cookie"));
         if (path === "/api/shop" && request.method === "GET" && !actor) {
-          return json({account:null,products:[],customerOrders:[],sellerOrders:[]});
+          return json({account:null,products:[],sellerProducts:[],customerOrders:[],sellerOrders:[],testAvailable:true});
         }
         if (path.startsWith("/api/") && request.method === "POST" && actor) {
           const permitted = role === "musteri"
-            ? ["/api/order", "/api/order-status"] : ["/api/product", "/api/order-status"];
+            ? ["/api/order", "/api/order-status"] : ["/api/product", "/api/product-visibility", "/api/order-status"];
           if (!permitted.includes(path)) fail(403, "Bu işlem hesabının rolüne açık değil.");
         }
       }
-      if (request.method === "GET" && path.startsWith("/photos/")) return await servePhoto(env, path);
-      if (request.method === "GET" && path === "/api/shop") return json(await marketplace(env.DB, actor));
+      if (request.method === "GET" && path.startsWith("/photos/")) return await servePhoto(env, path, actor, allowTest);
+      if (request.method === "GET" && path === "/api/shop") return json(await marketplace(env.DB, actor, allowTest));
       if (path.startsWith("/api/") && request.method === "POST") {
         if (!actor) fail(401, "Devam etmek için giriş yap.");
         const body = await readBody(request);
         if (path === "/api/kitchen") return await createKitchen(env.DB, actor, body);
         if (path === "/api/product") return await saveProduct(env, actor, body);
+        if (path === "/api/product-visibility") return await setListingVisibility(env.DB, actor, body);
         if (path === "/api/order") return await placeOrder(env.DB, actor, body);
         if (path === "/api/order-status") return await changeOrder(env.DB, actor, body);
       }

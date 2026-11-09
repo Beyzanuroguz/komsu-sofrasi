@@ -5,6 +5,8 @@ const files = {
   "/": ["text/html; charset=utf-8", read("public/index.html")],
   "/app.js": ["text/javascript; charset=utf-8", read("public/app.js")],
   "/rules.js": ["text/javascript; charset=utf-8", read("public/rules.js")],
+  "/icon.svg": ["image/svg+xml", read("public/icon.svg")],
+  "/manifest.webmanifest": ["application/manifest+json", read("public/manifest.webmanifest")],
   "/style.css": ["text/css; charset=utf-8", read("public/style.css")],
   "/hero.jpg": ["image/jpeg", readFileSync(new URL("../public/hero.jpg", import.meta.url)).toString("base64")],
 };
