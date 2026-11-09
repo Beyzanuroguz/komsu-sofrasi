@@ -14,8 +14,12 @@ const sellerId = maker => accounts.find(account => account.role === "seller" && 
 const ownerOf = item => item.sellerId ?? sellerId(item.maker);
 const makerOf = item => accounts.find(account => account.role === "seller" && account.id === ownerOf(item))?.name ?? item.maker;
 const units = ["adet", "porsiyon", "paket", "250 g", "500 g", "kg", "tepsi", "kavanoz"];
-const seedUnits = ["porsiyon", "paket", "paket", "paket", "porsiyon", "porsiyon"];
+const seedUnits = ["porsiyon", "paket", "kg", "paket", "porsiyon", "porsiyon"];
 const unitOf = item => units.includes(item.unit) ? item.unit : "adet";
+const quantityStep = item => unitOf(item) === "kg" ? 0.5 : 1;
+const validQuantity = (value, item) => Number.isSafeInteger(value / quantityStep(item));
+const formatQuantity = new Intl.NumberFormat("tr-TR", {maximumFractionDigits:1});
+const quantityLabel = (value, item) => `${formatQuantity.format(value)} ${unitOf(item)}`;
 const buyerOf = order => order.customerId ?? customerAccount.id;
 const slots = ["10:00", "12:00", "14:00", "16:00", "18:00", "20:00"];
 const slotLabel = slot => `${slot}–${String(Number(slot.slice(0, 2)) + 2).padStart(2, "0")}:00`;
@@ -37,7 +41,7 @@ const demoAreas = [
 const seeds = [
   ["Kayseri mantısı", "Ayşe'nin Mutfağı", "Ana yemek", 230, 12, "Yoğurt ve biber sosuyla, 1 porsiyon. Gluten ve süt içerir.", "🥣"],
   ["Ispanaklı kol böreği", "Zeynep'in Fırını", "Hamur işi", 180, 8, "El açması, 4 dilim. Gluten, süt ve yumurta içerir.", "🥟"],
-  ["Fıstıklı ev baklavası", "Fatma'nın Tatlıları", "Tatlı", 260, 10, "İnce yufka ve Antep fıstığı, 6 dilim. Gluten, süt ve fıstık içerir.", "🍯"],
+  ["Fıstıklı ev baklavası", "Fatma'nın Tatlıları", "Tatlı", 780, 10, "İnce yufka ve Antep fıstığı. Kilogramla satılır. Gluten, süt ve fıstık içerir.", "🍯"],
   ["Zeytinyağlı yaprak sarma", "Ayşe'nin Mutfağı", "Meze", 195, 9, "Limonlu ve bol yeşillikli, 12 adet.", "🫒"],
   ["Fırın sütlaç", "Fatma'nın Tatlıları", "Tatlı", 95, 16, "Üzeri kızarmış, 1 kâse. Süt içerir.", "🍮"],
   ["Ev usulü kuru fasulye", "Zeynep'in Fırını", "Ana yemek", 165, 8, "Pilavla servis edilir, 1 porsiyon.", "🍛"],
@@ -48,6 +52,27 @@ const seeds = [
 
 const key = "komsu-sofrasi-v1";
 const defaults = () => ({products: structuredClone(seeds), orders: [], cart: {}});
+function pendingFor(data, productId) {
+  return data.orders.some(order => orderStatus(order) === "Onay bekliyor" &&
+    order.items.some(item => item.id === productId));
+}
+
+function refreshSampleUnits(data) {
+  for (const product of data.products) {
+    const seed = seeds.find(item => item.id === product.id);
+    if (!seed || product.sellerId || product.name !== seed.name || product.maker !== seed.maker ||
+        data.cart[product.id] || pendingFor(data, product.id)) continue;
+    if (product.id === "3") {
+      const legacyDetails = "İnce yufka ve Antep fıstığı, 6 dilim. Gluten, süt ve fıstık içerir.";
+      if (product.price !== 260 || product.details !== legacyDetails ||
+          !["adet", "paket"].includes(unitOf(product))) continue;
+      Object.assign(product, {unit:seed.unit, price:seed.price, details:seed.details});
+    } else if (product.price === seed.price && product.details === seed.details && unitOf(product) === "adet") {
+      product.unit = seed.unit;
+    }
+  }
+}
+
 function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(key));
@@ -62,6 +87,7 @@ function load() {
           product.point = seed.point;
         }
       }
+      refreshSampleUnits(saved);
       return saved;
     }
   } catch {}
@@ -97,7 +123,8 @@ const cartEntries = () => Object.entries(state.cart).flatMap(([id, qty]) => {
   return product && qty > 0 ? [{product, qty}] : [];
 });
 const unitPrice = product => Math.round(product.price * 100);
-const orderTotal = entries => entries.reduce((sum, {product, qty}) => sum + unitPrice(product) * qty, 0);
+const lineTotal = (product, qty) => Math.round(unitPrice(product) * qty);
+const orderTotal = entries => entries.reduce((sum, {product, qty}) => sum + lineTotal(product, qty), 0);
 const uid = () => globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36) + Math.random().toString(36).slice(2);
 
 function notify(message) {
@@ -107,6 +134,7 @@ function notify(message) {
 }
 
 function update(next, message) {
+  refreshSampleUnits(next);
   try {
     localStorage.setItem(key, JSON.stringify(next));
   } catch {
@@ -152,9 +180,10 @@ function renderCatalog() {
     "Aramana uygun ürün bulunamadı.";
   byId("catalog").innerHTML = matches.map(p => {
     const inCart = state.cart[p.id] || 0;
+    const step = quantityStep(p);
     const available = Math.max(0, p.stock - inCart);
     const unit = unitOf(p);
-    const label = !p.stock ? "Tükendi" : !available ? "Stok sınırı" : "+ Sepete ekle";
+    const label = !p.stock ? "Tükendi" : available < step ? "Stok sınırı" : "+ Sepete ekle";
     const place = [p.neighborhood, p.district].filter(Boolean).join(" · ");
     const distance = p.km === null ? "" : p.km < 0.1 ? "100 m’den yakın" :
       `${p.km.toLocaleString("tr-TR", {maximumFractionDigits:1})} km`;
@@ -164,12 +193,12 @@ function renderCatalog() {
     return `<article class="card">
       <div class="food-visual" data-kind="${escape(p.category)}" aria-hidden="true">${visual}</div>
       <div class="card-body"><span class="eyebrow">${escape(p.category)}</span><h3>${escape(p.name)}</h3>
-      <span class="muted">${escape(makerOf(p))} · ${p.stock} ${unit}</span>${location ? `<span class="food-place">⌖ ${escape(location)}</span>` : ""}<p>${escape(p.details)}</p>
+      <span class="muted">${escape(makerOf(p))} · ${quantityLabel(p.stock, p)}</span>${location ? `<span class="food-place">⌖ ${escape(location)}</span>` : ""}<p>${escape(p.details)}</p>
       <div class="card-bottom"><strong>${money(unitPrice(p))} <small class="unit-price">/ ${unit}</small></strong></div>
       <div class="purchase-controls"><label class="purchase-qty">${unit === "adet" ? "Adet" : "Miktar (" + unit + ")"}
-        <input type="number" min="1" max="${Math.max(1, available)}" step="1" value="1" data-quantity
-          aria-label="${escape(p.name + " miktarı (" + unit + ")")}" ${available ? "" : "disabled"}></label>
-        <button class="pill" data-bulk="${p.id}" aria-label="${escape(p.name + " · " + label)}" ${available ? "" : "disabled"}>${label}</button></div></div>
+        <input type="number" min="${step}" max="${Math.max(step, available)}" step="${step}" value="${available >= 1 ? 1 : step}" data-quantity
+          aria-label="${escape(p.name + " miktarı (" + unit + ")")}" ${available >= step ? "" : "disabled"}></label>
+        <button class="pill" data-bulk="${p.id}" aria-label="${escape(p.name + " · " + label)}" ${available >= step ? "" : "disabled"}>${label}</button></div></div>
     </article>`;
   }).join("");
 }
@@ -221,8 +250,8 @@ function renderCart() {
   byId("cart-signin").hidden = !entries.length || isCustomer;
   if (entries.length && isCustomer) refreshSchedule();
   byId("cart-lines").innerHTML = !entries.length ? '<p class="muted">Sepetin boş. Keşfet ekranından ürün ekleyebilirsin.</p>' : entries.map(({product:p, qty}) =>
-    `<div class="inventory-row"><div><b>${escape(p.name)}</b><br><small>${money(unitPrice(p))} / ${unitOf(p)} · ${money(unitPrice(p) * qty)}${qty > p.stock ? " · Stok azaldı, adedi düşür" : ""}</small></div>
-      <div class="qty"><button data-minus="${p.id}" aria-label="Bir ${unitOf(p)} çıkar">−</button><span>${qty} ${unitOf(p)}</span><button data-add="${p.id}" aria-label="Bir ${unitOf(p)} ekle" ${qty >= p.stock ? "disabled" : ""}>+</button></div></div>`).join("") +
+    `<div class="inventory-row"><div><b>${escape(p.name)}</b><br><small>${money(unitPrice(p))} / ${unitOf(p)} · ${money(lineTotal(p, qty))}${qty > p.stock ? " · Stok azaldı, miktarı düşür" : ""}</small></div>
+      <div class="qty"><button data-minus="${p.id}" aria-label="${quantityLabel(quantityStep(p), p)} çıkar">−</button><span>${quantityLabel(qty, p)}</span><button data-add="${p.id}" aria-label="${quantityLabel(quantityStep(p), p)} ekle" ${qty + quantityStep(p) > p.stock ? "disabled" : ""}>+</button></div></div>`).join("") +
     `<p><strong>Toplam ${money(orderTotal(entries))}</strong></p>`;
 }
 
@@ -245,11 +274,25 @@ function orderCard(order, seller) {
     : status === "Onay bekliyor" ? [{next:"İptal",label:"Talebi iptal et",kind:"pill reject"}] : [];
   return `<article class="order">
     <div class="order-top"><b>${escape(seller ? order.customer : order.maker)} · #${escape(order.id.slice(0, 8))}</b><span class="pill ${badge}">${escape(status)}</span></div>
-    <p>${order.items.map(item => `${item.qty} ${unitOf(item)} · ${escape(item.name)}`).join(", ")}</p>
+    <p>${order.items.map(item => `${quantityLabel(item.qty, item)} · ${escape(item.name)}`).join(", ")}</p>
     <p class="order-time">${escape(scheduled)}</p>
     <p class="muted">${escape(order.handoff)} · ${money(order.total)} · ${payment}</p>
+    ${status === "Onay bekliyor" ? `<p class="muted">${seller ? "Teslim zamanı uygunsa talebi onayla." : "Üreticinin teslim zamanını onaylaması bekleniyor."}</p>` : ""}
     ${actions.length ? `<div class="order-actions">${actions.map(({next,label,kind}) => `<button class="${kind}" data-order="${escape(order.id)}" data-next="${next}">${next === "Tamamlandı" && !order.paymentMethod ? "Teslim edildi" : label}</button>`).join("")}</div>` : ""}
   </article>`;
+}
+
+function renderSellerOrders(seller) {
+  const orders = seller ? state.orders.filter(order => ownerOf(order) === seller.id) : [];
+  const pending = orders.filter(order => orderStatus(order) === "Onay bekliyor");
+  const other = orders.filter(order => orderStatus(order) !== "Onay bekliyor");
+  byId("seller-orders").innerHTML = `
+    <section class="pending-orders" aria-labelledby="pending-title">
+      <div class="pending-heading"><h3 id="pending-title">Onay bekleyenler</h3><span class="pill status-pending">${pending.length}</span></div>
+      ${pending.map(order => orderCard(order, true)).join("") || '<p class="muted">Onay bekleyen sipariş yok.</p>'}
+    </section>
+    ${other.length ? `<section class="other-orders" aria-labelledby="other-orders-title"><h3 id="other-orders-title">Diğer siparişler</h3>
+      ${other.map(order => orderCard(order, true)).join("")}</section>` : ""}`;
 }
 
 function render() {
@@ -259,9 +302,8 @@ function render() {
   const seller = activeAccount?.role === "seller" ? activeAccount : null;
   byId("seller-name").textContent = seller?.name ?? "";
   byId("inventory").innerHTML = seller ? state.products.filter(p => ownerOf(p) === seller.id).map(p =>
-    `<div class="inventory-row"><div><b>${escape(p.name)}</b><br><small>${p.stock} ${unitOf(p)} stok · ${money(unitPrice(p))} / ${unitOf(p)}</small></div><button class="pill" data-edit="${p.id}">Düzenle</button></div>`).join("") || '<p class="muted">Menünde henüz ürün yok.</p>' : "";
-  byId("seller-orders").innerHTML = (seller ? state.orders.filter(o => ownerOf(o) === seller.id).map(o => orderCard(o, true)).join("") : "") ||
-    '<p class="muted">Henüz sipariş yok.</p>';
+    `<div class="inventory-row"><div><b>${escape(p.name)}</b><br><small>${quantityLabel(p.stock, p)} stok · ${money(unitPrice(p))} / ${unitOf(p)}</small></div><button class="pill" data-edit="${p.id}">Düzenle</button></div>`).join("") || '<p class="muted">Menünde henüz ürün yok.</p>' : "";
+  renderSellerOrders(seller);
   const customer = activeAccount?.role === "customer" ? activeAccount : null;
   byId("my-orders").innerHTML = customer
     ? state.orders.filter(o => buyerOf(o) === customer.id).map(o => orderCard(o, false)).join("") ||
@@ -271,13 +313,13 @@ function render() {
 
 function changeQuantity(id, delta) {
   const p = findProduct(id);
-  if (!p || !Number.isSafeInteger(delta) || delta === 0) return;
+  if (!p || !validQuantity(delta, p) || delta === 0) return;
   const qty = (state.cart[id] || 0) + delta;
-  if (qty > p.stock && delta > 0) return notify("Sepete eklenebilecek en fazla miktar " + Math.max(0, p.stock - (state.cart[id] || 0)) + " " + unitOf(p) + ".");
+  if (qty > p.stock && delta > 0) return notify("Sepete eklenebilecek en fazla miktar " + quantityLabel(Math.max(0, p.stock - (state.cart[id] || 0)), p) + ".");
   const next = structuredClone(state);
   if (qty > 0) next.cart[id] = qty;
   else delete next.cart[id];
-  update(next, delta > 0 ? `${delta} ${unitOf(p)} sepete eklendi` : "");
+  update(next, delta > 0 ? `${quantityLabel(delta, p)} sepete eklendi` : "");
 }
 
 function renderProductPhoto() {
@@ -296,13 +338,9 @@ function renderProductPoint() {
     : "Yakındaki aramalarda çıkmak için teslim noktasında konum ekleyebilirsin.";
 }
 
-function hasPendingOrder(productId) {
-  return state.orders.some(order => orderStatus(order) === "Onay bekliyor" &&
-    order.items.some(item => item.id === productId));
-}
-
 function renderUnit() {
   const select = byId("product-unit");
+  byId("product-stock").step = quantityStep({unit:select.value});
   byId("stock-unit").textContent = select.value;
   byId("price-unit").textContent = select.value;
   byId("unit-note").textContent = select.disabled ? "Onay bekleyen sipariş varken satış birimi sabit kalır." :
@@ -319,7 +357,7 @@ function openProduct(product) {
     form.elements[field].value = product[field] ?? "";
   }
   byId("product-unit").value = unitOf(product ?? {});
-  byId("product-unit").disabled = Boolean(product && hasPendingOrder(product.id));
+  byId("product-unit").disabled = Boolean(product && pendingFor(state, product.id));
   renderUnit();
   productPoint = product?.point ?? null;
   productPhoto = photoPattern.test(product?.photo || "") ? product.photo : "";
@@ -573,11 +611,11 @@ document.addEventListener("click", event => {
   if (data.bulk) {
     const input = button.closest(".card").querySelector("[data-quantity]");
     const quantity = input.valueAsNumber;
-    if (input.reportValidity() && Number.isSafeInteger(quantity) && quantity > 0) changeQuantity(data.bulk, quantity);
+    if (input.reportValidity() && Number.isFinite(quantity) && quantity > 0) changeQuantity(data.bulk, quantity);
     else if (!input.value) input.focus();
   }
-  if (data.add) changeQuantity(data.add, 1);
-  if (data.minus) changeQuantity(data.minus, -1);
+  if (data.add) changeQuantity(data.add, quantityStep(findProduct(data.add) ?? {}));
+  if (data.minus) changeQuantity(data.minus, -quantityStep(findProduct(data.minus) ?? {}));
   if (data.edit && activeAccount?.role === "seller") {
     const product = findProduct(data.edit);
     if (product && ownerOf(product) === activeAccount.id) openProduct(product);
@@ -600,12 +638,14 @@ byId("product-form").addEventListener("submit", event => {
   const oldUnit = unitOf(existing ?? {});
   const unit = fields.unit === undefined ? oldUnit : fields.unit;
   if (!units.includes(unit)) return notify("Geçerli bir satış birimi seç.");
-  if (existing && unit !== oldUnit && hasPendingOrder(existing.id)) return notify("Onay bekleyen sipariş varken birim değiştirilemez.");
+  const stock = Number(fields.stock);
+  if (!validQuantity(stock, {unit}) || stock < 0 || stock > 9999) return notify("Satış birimine uygun bir stok miktarı gir.");
+  if (existing && unit !== oldUnit && pendingFor(state, existing.id)) return notify("Onay bekleyen sipariş varken birim değiştirilemez.");
   const removedFromCart = existing && unit !== oldUnit && Boolean(next.cart[existing.id]);
   if (removedFromCart) delete next.cart[existing.id];
   const product = {id: existing?.id ?? uid(), sellerId:activeAccount.id, name, maker:activeAccount.name, unit, details, category: fields.category,
     district: (fields.district ?? "").trim(), neighborhood: (fields.neighborhood ?? "").trim(),
-    point: productPoint, photo: productPhoto, price: Number(fields.price), stock: Number(fields.stock), visual: existing?.category === fields.category ? existing.visual : icon[fields.category]};
+    point: productPoint, photo: productPhoto, price: Number(fields.price), stock, visual: existing?.category === fields.category ? existing.visual : icon[fields.category]};
   if (existing) Object.assign(existing, product);
   else next.products.unshift(product);
   if (update(next, removedFromCart ? "Ürün kaydedildi. Birim değiştiği için önceki sepet kalemi kaldırıldı." : "Ürün kaydedildi")) byId("product-dialog").close();

@@ -122,3 +122,8 @@ form input,select,textarea{width:100%;min-width:0;border:1px solid #aeb5a8;backg
 .purchase-qty input{width:74px;min-height:35px;padding:3px 6px;border:1px solid #aeb5a8;border-radius:8px;background:white;color:var(--ink)}
 .unit-price{font-size:13px;color:var(--muted);white-space:nowrap}
 .location-controls select{width:auto;max-width:100%}
+
+.pending-orders{background:#f5efe1;border:1px solid #e6dac0;border-radius:13px;padding:12px}
+.pending-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pending-orders p:last-child{margin-bottom:0}
+.other-orders{margin-top:18px}

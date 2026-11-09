@@ -20,4 +20,4 @@ Hesaplar bu tarayıcıdaki örnek profillerdir. Örnek ürünler, fotoğraflar, 
 - Üretici teslim noktasındayken cihaz konumunu ürüne ekleyebilir. Müşteri **Konumumu kullan** seçeneğiyle 2, 5, 10 veya 25 km içinde kalan ürünleri kuş uçuşu mesafeye göre sıralayabilir. Konum izni için HTTPS veya localhost gerekir.
 
 - Cihaz konumu kullanılamıyorsa **Örnek konum seç** menüsünden İstanbul’daki hazır merkezlerden birini seçip mesafe filtresini deneyebilirsin. Üretici panelinde de örnek bir teslim bölgesi seçilebilir.
-- Üretici **Satış birimi** alanında adet, porsiyon, paket, tepsi veya ağırlık seçer. Fiyat, stok ve müşteri miktarı bu birimle ifade edilir. Örneğin 500 g biriminde miktar 2 ise toplam 1 kg sipariş edilir.
+- Üretici **Satış birimi** alanında adet, porsiyon, paket, tepsi veya ağırlık seçer. Fiyat, stok ve müşteri miktarı bu birimle ifade edilir. Örneğin fıstıklı baklavanın fiyatı kilogram başına gösterilir. Müşteri 0,5 kg, 1 kg veya 1,5 kg gibi miktarlar seçebilir.

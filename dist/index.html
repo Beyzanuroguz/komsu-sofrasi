@@ -65,7 +65,7 @@
 <label>Ürün adı<input name="name" maxlength="70" required></label>
 <p class="muted form-note">Üretici <strong id="product-seller"></strong></p>
 <label>Kategori<select name="category" id="categories"></select></label>
-<div class="fields"><label><span>Fiyat (₺ / <span id="price-unit">adet</span>)</span><input type="number" name="price" min="1" max="100000" step="0.01" required></label><label><span>Stok (<span id="stock-unit">adet</span>)</span><input type="number" name="stock" min="0" max="9999" step="1" required></label></div>
+<div class="fields"><label><span>Fiyat (₺ / <span id="price-unit">adet</span>)</span><input type="number" name="price" min="1" max="100000" step="0.01" required></label><label><span>Stok (<span id="stock-unit">adet</span>)</span><input type="number" name="stock" id="product-stock" min="0" max="9999" step="1" required></label></div>
 <label>Satış birimi<select name="unit" id="product-unit"></select></label>
 <p id="unit-note" class="muted form-note">Fiyat ve stok seçilen birim içindir.</p>
 <label>Açıklama ve alerjen bilgisi<textarea name="details" rows="3" maxlength="240" required></textarea></label>
