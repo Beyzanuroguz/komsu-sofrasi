@@ -6,14 +6,15 @@
 <meta name="description" content="Ev yapımı yemek ve tatlıları keşfet, yerel üreticilerden sipariş ver.">
 <title>Komşu Sofrası • Evden sofrana</title>
 <link rel="stylesheet" href="style.css">
-<script defer src="app.js"></script>
+<script type="module" src="app.js"></script>
 </head>
 <body>
 <header><div class="bar wrap">
 <button class="brand" data-view="shop"><span class="logo" aria-hidden="true">♨</span><span>Komşu Sofrası<small>EVDEN SOFRANA</small></span></button>
-<nav aria-label="Ana menü"><button data-view="shop" aria-current="page">Keşfet</button><button data-view="seller">Üretici paneli</button><button id="account-button">Giriş yap</button><button class="dark" id="cart-button">Sepet <span id="count">0</span></button></nav>
+<nav aria-label="Ana menü"><button data-view="shop" aria-current="page">Keşfet</button><button data-view="orders">Siparişlerim</button><button data-view="seller">Üretici paneli</button><button id="account-button">Giriş yap</button><button class="dark" id="cart-button">Sepet <span id="count">0</span></button></nav>
 </div></header>
 <main id="main" class="wrap">
+<p id="sync-status" class="muted sync-status" role="status" hidden></p>
 <section id="shop">
 <div class="hero">
 <div class="hero-copy"><span class="eyebrow"><i></i> YEREL MUTFAKLARDAN</span><h1>Ev yapımı.<br><em>Komşu tadında.</em></h1><p>Mahallendeki üreticilerin özenle hazırladığı yemekleri keşfet. Mantıdan baklavaya, sevdiğin lezzetler sofrana gelsin.</p><a class="button" href="#menu">Menüyü keşfet <span aria-hidden="true">↓</span></a></div>
@@ -25,27 +26,43 @@
 <div class="location-intro"><span class="location-mark" aria-hidden="true">⌖</span><div><strong>Yakınındaki lezzetler</strong><p class="muted" id="location-status" role="status">İlçe veya mahalle yaz ya da cihaz konumunu kullan.</p></div></div>
 <div class="location-controls"><label><span class="sr-only">İlçe veya mahalle</span><input id="area-search" type="search" placeholder="İlçe veya mahalle"></label>
 <label id="radius-label" hidden><span class="sr-only">Arama yarıçapı</span><select id="radius"><option value="2">2 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="25">25 km</option></select></label>
-<button type="button" class="pill" id="nearby" aria-pressed="false">Konumumu kullan</button>
-<label><span class="sr-only">Mesafe hesabı için örnek konum</span><select id="area-center"><option value="">Örnek konum seç</option></select></label></div>
+<button type="button" class="pill" id="nearby" aria-pressed="false">Konumumu kullan</button></div>
 </div>
 <div class="filters" id="filters" aria-label="Ürün kategorileri"></div>
 <p class="muted" id="results" aria-live="polite"></p>
 <div id="catalog" class="cards"></div>
 </section>
-<section class="customer-orders" aria-labelledby="my-title"><h2 id="my-title">Siparişlerim</h2><div id="my-orders"></div></section>
+</section>
+<section class="customer-orders" id="orders" aria-labelledby="my-title" hidden>
+<div class="seller-intro"><span class="eyebrow">HESABIM</span><h1 id="my-title">Siparişlerim</h1><p>Bekleyen siparişlerini ve teslim edilenleri burada bulabilirsin.</p></div>
+<div id="orders-account"></div>
+<div class="order-history" id="order-history" hidden>
+<section class="panel" aria-labelledby="active-title"><h2 id="active-title">Aktif siparişler</h2><div id="my-orders"></div></section>
+<section class="panel" aria-labelledby="history-title"><h2 id="history-title">Geçmiş siparişler</h2><div id="past-orders"></div></section>
+</div>
 </section>
 <section id="seller" hidden>
-<div class="seller-intro"><span class="eyebrow">ÜRETİCİ PANELİ · DEMO</span><h1>Mutfağını yönet.</h1><p><strong id="seller-name"></strong> · Siparişleri onayla, menünü ve stoklarını yönet.</p><button class="button" id="new-product">+ Ürün ekle</button></div>
-<div class="seller-grid"><section class="panel"><h2>Gelen siparişler</h2><div id="seller-orders"></div></section><section class="panel"><h2>Menüm</h2><p class="muted form-note">Burada kendi ürünlerini düzenleyebilirsin.</p><div id="inventory"></div></section></div>
+<div class="seller-intro"><span class="eyebrow">ÜRETİCİ PANELİ</span><h1>Mutfağını yönet.</h1><p><strong id="seller-name"></strong> · Siparişleri onayla, menünü ve stoklarını yönet.</p><button class="button" id="new-product" hidden>+ Ürün ekle</button></div>
+<div id="seller-account"></div>
+<form class="panel setup-panel" id="kitchen-form" hidden>
+<h2>Mutfağını aç</h2><label>Mutfak adı<input name="name" minlength="2" maxlength="65" required></label>
+<label>Elden teslim bilgisi<textarea name="pickupNote" rows="2" maxlength="240" required placeholder="Teslim noktasını veya nasıl buluşacağınızı yaz"></textarea></label>
+<p class="muted form-note">Bu bilgi yalnızca onaylanan elden teslim siparişinin müşterisine gösterilir.</p>
+<button class="button" id="create-kitchen">Mutfağı aç</button>
+</form>
+<div class="seller-grid" id="seller-workspace" hidden><section class="panel"><h2>Gelen siparişler</h2><div id="seller-orders"></div></section><section class="panel"><h2>Menüm</h2><p class="muted form-note">Burada kendi ürünlerini düzenleyebilirsin.</p><div id="inventory"></div></section></div>
 </section>
 </main>
-<footer class="wrap"><b>Komşu Sofrası</b><span>Demo · Hesaplar örnektir. Ürün ve siparişler bu tarayıcıda saklanır.</span></footer>
+<footer class="wrap"><b>Komşu Sofrası</b><span>Yerel mutfaklardan sofrana</span></footer>
 <dialog id="cart-dialog" aria-labelledby="cart-title">
 <div class="dialog-heading"><h2 id="cart-title">Sepetim</h2><button class="close" aria-label="Kapat" data-close>×</button></div>
 <div id="cart-lines"></div>
-<div id="cart-signin" hidden><p class="muted">Sipariş vermek için müşteri hesabını seç.</p><button class="button wide" id="checkout-login">Müşteri girişi</button></div>
+<div id="cart-signin" hidden><p class="muted">Sipariş vermek için giriş yap.</p><a class="button wide" href="/signin-with-chatgpt?return_to=%2F" target="_top">ChatGPT ile giriş yap</a></div>
 <form id="checkout" hidden>
-<label>Teslim şekli<select name="handoff"><option>Elden teslim</option><option>Teslimat talebi</option></select></label>
+<div class="fields"><label>Ad soyad<input name="customerName" id="customer-name" maxlength="70" required autocomplete="name"></label><label>Telefon<input type="tel" name="contact" autocomplete="tel" maxlength="26" required></label></div>
+<p class="muted form-note">Teslimat için iletişim bilgilerin yalnızca ilgili üreticiyle paylaşılır.</p>
+<label>Teslim şekli<select name="handoff" id="handoff"><option>Elden teslim</option><option>Teslimat talebi</option></select></label>
+<label id="delivery-address-label" hidden>Teslim adresi<textarea name="address" id="delivery-address" autocomplete="street-address" maxlength="240" rows="2" minlength="8"></textarea></label>
 <div class="fields"><label>Teslim tarihi<input id="delivery-date" name="date" type="date" required></label><label>Saat aralığı<select name="slot" id="delivery-slot" required></select></label></div>
 <p class="muted form-note">Teslim saati Türkiye saatidir. Üretici seçtiğin zamanı onaylar.</p>
 <div class="payment-box"><b>Teslimde nakit ödeme</b><p class="muted form-note">Sipariş onaylanırsa tutarı teslim sırasında üreticiye ödersin.</p></div>
@@ -53,10 +70,10 @@
 </form>
 </dialog>
 <dialog id="account-dialog" aria-labelledby="account-title">
-<div class="dialog-heading"><h2 id="account-title">Demo girişi</h2><button class="close" aria-label="Kapat" data-close>×</button></div>
-<p class="muted" id="account-note">Müşteri veya üretici hesabı seç.</p>
+<div class="dialog-heading"><h2 id="account-title">Hesabım</h2><button class="close" aria-label="Kapat" data-close>×</button></div>
+<p class="muted" id="account-note"></p>
 <div id="account-options" class="account-options"></div>
-<button type="button" class="pill" id="sign-out" hidden>Oturumu kapat</button>
+
 </dialog>
 <dialog id="product-dialog" aria-labelledby="product-title">
 <div class="dialog-heading"><h2 id="product-title">Ürün ekle</h2><button class="close" aria-label="Kapat" data-close>×</button></div>
@@ -75,7 +92,6 @@
 <fieldset class="product-location"><legend>Teslim bölgesi</legend>
 <div class="fields"><label>İlçe<input name="district" maxlength="55" placeholder="Örn. Kadıköy"></label><label>Mahalle<input name="neighborhood" maxlength="55" placeholder="Örn. Moda"></label></div>
 <div class="location-actions"><button type="button" class="pill" id="set-product-location">Şu anki konumu ekle</button><button type="button" class="pill" id="clear-product-location" hidden>Konumu kaldır</button></div>
-<label>Örnek teslim konumu<select id="product-area-center"><option value="">Örnek konum seç</option></select></label>
 <p id="product-location-status" class="muted form-note" role="status">Yakındaki aramalarda çıkmak için teslim noktasında konum ekleyebilirsin.</p>
 </fieldset>
 <button class="button wide" id="save-product">Ürünü kaydet</button>

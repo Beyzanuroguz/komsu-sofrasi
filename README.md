@@ -1,23 +1,18 @@
 # Komşu Sofrası
 
-Ev yapımı yemek, tatlı ve hamur işleri için Türkçe sipariş prototipi.
+Ev yapımı yemek, tatlı ve hamur işleri için sipariş uygulaması. Müşteriler teslim zamanı seçip sipariş talebi gönderir. Üreticiler kendi ürünlerini ve kendilerine gelen talepleri yönetir. Tamamlanan, reddedilen ve iptal edilen siparişler müşterinin **Geçmiş siparişler** bölümünde saklanır.
 
-## Çalıştırma
+## Kullanım
 
-`dist/index.html` dosyasını tarayıcıda aç veya proje kökünden `python3 -m http.server 8080 --directory dist` komutunu çalıştırıp `http://localhost:8080` adresine git.
+1. Siteye hesabınla giriş yap. **Üretici paneli** bölümünden mutfağını aç. Elden teslim bilgisi, onaylanmış elden teslim siparişlerinin müşterilerine gösterilir.
+2. Ürün adı, fiyat, stok ve satış birimini gir. İstersen fotoğraf ve yaklaşık teslim bölgesi ekle. Kilogramla satılan ürünler yarım kilo adımlarıyla sipariş edilebilir.
+3. Başka bir yetkili hesapla **Keşfet** ekranından ürünü sepete ekle. Teslim şekli, tarih ve saat seçip siparişi onaya gönder.
+4. Üretici hesabında **Gelen siparişler** bölümünden talebi onayla veya reddet. Teslim sırasında nakit alındığında üretici siparişi tamamlar.
 
-1. **Giriş yap** menüsünden **Deniz** müşteri hesabını seç.
-2. **Keşfet** ekranında tüm üreticilerin ürünlerini görebilirsin. Miktarı seçip ürünü sepete ekle. Teslim tarihini ve saat aralığını seçip **Onaya gönder**. Saatler Türkiye saatidir. Bu demo teslimde nakit ödemeyi kullanır.
-3. **Hesap değiştir** menüsünden ürünün üreticisini seç. Menü ve gelen siparişler seçili üreticiye aittir. Üretici panelinde **Onayla** veya **Reddet** seçeneğini kullan. Onaylanan siparişleri hazırlık ve teslim adımlarıyla ilerletebilirsin. Ret ve onay öncesi müşteri iptali ayrılan stoğu geri ekler.
-4. **Deniz** hesabına dönüp **Siparişlerim** bölümünde sonucu gör.
+Uygulama ilk açılışta boş katalogla başlar. Önceki prototipteki örnek ürünler, tarayıcıya kayıtlı siparişler ve demo hesaplar sunucuya aktarılmaz. Ödeme yöntemi teslimde nakittir.
 
-Hesaplar bu tarayıcıdaki örnek profillerdir. Örnek ürünler, fotoğraflar, sepet ve siparişler yerel depolamada saklanır. Ödeme durumu demo kaydıdır. Gerçek kullanıcı hesapları, ortak veritabanı, çevrimiçi tahsilat ve teslimat entegrasyonu sonraki sürümün kapsamıdır.
+## Geliştirme ve yayın
 
-## Fotoğraf ve konum
+`npm run build` bağımlılık kurmadan `dist/server/index.js` oluşturur. Worker, Sites’ın sağladığı doğrulanmış kullanıcı kimliğini, D1 `DB` bağını ve R2 `BUCKET` bağını kullanır. `drizzle/0000_marketplace.sql` şemayı oluşturur. Sites üzerinden yayınlarken bu bağlantılar ve şema Sites tarafından hazırlanır.
 
-- Üretici panelinde bir ürün eklerken veya düzenlerken JPG, PNG ya da WebP yükleyebilirsin. Fotoğraf tarayıcıda küçültülür ve ürünle birlikte saklanır.
-- İlçe ve mahalleye göre aramayı denemek için Kadıköy, Kuzguncuk veya Beşiktaş yaz. Hazır ürünler İstanbul’daki örnek bölgeleri kullanır.
-- Üretici teslim noktasındayken cihaz konumunu ürüne ekleyebilir. Müşteri **Konumumu kullan** seçeneğiyle 2, 5, 10 veya 25 km içinde kalan ürünleri kuş uçuşu mesafeye göre sıralayabilir. Konum izni için HTTPS veya localhost gerekir.
-
-- Cihaz konumu kullanılamıyorsa **Örnek konum seç** menüsünden İstanbul’daki hazır merkezlerden birini seçip mesafe filtresini deneyebilirsin. Üretici panelinde de örnek bir teslim bölgesi seçilebilir.
-- Üretici **Satış birimi** alanında adet, porsiyon, paket, tepsi veya ağırlık seçer. Fiyat, stok ve müşteri miktarı bu birimle ifade edilir. Örneğin fıstıklı baklavanın fiyatı kilogram başına gösterilir. Müşteri 0,5 kg, 1 kg veya 1,5 kg gibi miktarlar seçebilir.
+Ürünler ve siparişler D1'de, fotoğraflar R2'de saklanır. Sepet geçici tarayıcı oturumunda tutulur. Yönetim işlemleri için kullanıcı kimliği ve ürün ya da sipariş sahipliği sunucuda doğrulanır. Sipariş onayı ve stok hareketleri veritabanında tutulur. Teslimat iletişim bilgileri yalnızca ilgili siparişin taraflarına gösterilir.
