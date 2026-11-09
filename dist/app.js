@@ -12,6 +12,10 @@ const accounts = [
 const customerAccount = accounts[0];
 const sellerId = maker => accounts.find(account => account.role === "seller" && account.name === maker)?.id ?? "ayse";
 const ownerOf = item => item.sellerId ?? sellerId(item.maker);
+const makerOf = item => accounts.find(account => account.role === "seller" && account.id === ownerOf(item))?.name ?? item.maker;
+const units = ["adet", "porsiyon", "paket", "250 g", "500 g", "kg", "tepsi", "kavanoz"];
+const seedUnits = ["porsiyon", "paket", "paket", "paket", "porsiyon", "porsiyon"];
+const unitOf = item => units.includes(item.unit) ? item.unit : "adet";
 const buyerOf = order => order.customerId ?? customerAccount.id;
 const slots = ["10:00", "12:00", "14:00", "16:00", "18:00", "20:00"];
 const slotLabel = slot => `${slot}–${String(Number(slot.slice(0, 2)) + 2).padStart(2, "0")}:00`;
@@ -39,7 +43,8 @@ const seeds = [
   ["Ev usulü kuru fasulye", "Zeynep'in Fırını", "Ana yemek", 165, 8, "Pilavla servis edilir, 1 porsiyon.", "🍛"],
 ].map(([name, maker, category, price, stock, details, visual], index) =>
   ({id: String(index + 1), name, maker, category, price, stock, details, visual,
-    ...demoAreas[index % 3]}));
+    unit:seedUnits[index], ...demoAreas[index % 3],
+    point:{...demoAreas[index % 3].point, areaIndex:index % 3}}));
 
 const key = "komsu-sofrasi-v1";
 const defaults = () => ({products: structuredClone(seeds), orders: [], cart: {}});
@@ -48,8 +53,9 @@ function load() {
     const saved = JSON.parse(localStorage.getItem(key));
     if (Array.isArray(saved?.products) && Array.isArray(saved.orders) && saved.cart) {
       for (const product of saved.products) {
-        if ("district" in product) continue;
         const seed = seeds.find(item => item.id === product.id);
+        if (!("unit" in product)) product.unit = "adet";
+        if ("district" in product) continue;
         if (seed) {
           product.district = seed.district;
           product.neighborhood = seed.neighborhood;
@@ -74,6 +80,7 @@ let activeAccount = readAccount();
 let returnToCart = false;
 let category = "";
 let nearbyPoint = null;
+let nearbySource = "";
 let productPoint = null;
 let productPhoto = "";
 let editorSession = 0;
@@ -133,7 +140,7 @@ function renderCatalog() {
   const products = state.products.filter(p => {
     const location = normalize([p.district, p.neighborhood].filter(Boolean).join(" "));
     return (!category || p.category === category) && location.includes(area) &&
-      normalize(p.name + " " + p.maker).includes(query);
+      normalize(p.name + " " + makerOf(p)).includes(query);
   }).map(p => ({...p, km: nearbyPoint && p.point ? distanceKm(nearbyPoint, p.point) : null}));
   const matches = nearbyPoint
     ? products.filter(p => p.km !== null && p.km <= radius).sort((a, b) => a.km - b.km)
@@ -145,7 +152,9 @@ function renderCatalog() {
     "Aramana uygun ürün bulunamadı.";
   byId("catalog").innerHTML = matches.map(p => {
     const inCart = state.cart[p.id] || 0;
-    const label = !p.stock ? "Tükendi" : inCart >= p.stock ? "Stok sınırı" : "+ Sepete ekle";
+    const available = Math.max(0, p.stock - inCart);
+    const unit = unitOf(p);
+    const label = !p.stock ? "Tükendi" : !available ? "Stok sınırı" : "+ Sepete ekle";
     const place = [p.neighborhood, p.district].filter(Boolean).join(" · ");
     const distance = p.km === null ? "" : p.km < 0.1 ? "100 m’den yakın" :
       `${p.km.toLocaleString("tr-TR", {maximumFractionDigits:1})} km`;
@@ -155,8 +164,12 @@ function renderCatalog() {
     return `<article class="card">
       <div class="food-visual" data-kind="${escape(p.category)}" aria-hidden="true">${visual}</div>
       <div class="card-body"><span class="eyebrow">${escape(p.category)}</span><h3>${escape(p.name)}</h3>
-      <span class="muted">${escape(p.maker)} · ${p.stock} adet</span>${location ? `<span class="food-place">⌖ ${escape(location)}</span>` : ""}<p>${escape(p.details)}</p>
-      <div class="card-bottom"><strong>${money(unitPrice(p))}</strong><button class="pill" data-add="${p.id}" aria-label="${escape(p.name + " · " + label)}" ${inCart >= p.stock ? "disabled" : ""}>${label}</button></div></div>
+      <span class="muted">${escape(makerOf(p))} · ${p.stock} ${unit}</span>${location ? `<span class="food-place">⌖ ${escape(location)}</span>` : ""}<p>${escape(p.details)}</p>
+      <div class="card-bottom"><strong>${money(unitPrice(p))} <small class="unit-price">/ ${unit}</small></strong></div>
+      <div class="purchase-controls"><label class="purchase-qty">${unit === "adet" ? "Adet" : "Miktar (" + unit + ")"}
+        <input type="number" min="1" max="${Math.max(1, available)}" step="1" value="1" data-quantity
+          aria-label="${escape(p.name + " miktarı (" + unit + ")")}" ${available ? "" : "disabled"}></label>
+        <button class="pill" data-bulk="${p.id}" aria-label="${escape(p.name + " · " + label)}" ${available ? "" : "disabled"}>${label}</button></div></div>
     </article>`;
   }).join("");
 }
@@ -208,8 +221,8 @@ function renderCart() {
   byId("cart-signin").hidden = !entries.length || isCustomer;
   if (entries.length && isCustomer) refreshSchedule();
   byId("cart-lines").innerHTML = !entries.length ? '<p class="muted">Sepetin boş. Keşfet ekranından ürün ekleyebilirsin.</p>' : entries.map(({product:p, qty}) =>
-    `<div class="inventory-row"><div><b>${escape(p.name)}</b><br><small>${money(unitPrice(p) * qty)}${qty > p.stock ? " · Stok azaldı, adedi düşür" : ""}</small></div>
-      <div class="qty"><button data-minus="${p.id}" aria-label="Bir adet çıkar">−</button><span>${qty}</span><button data-add="${p.id}" aria-label="Bir adet ekle" ${qty >= p.stock ? "disabled" : ""}>+</button></div></div>`).join("") +
+    `<div class="inventory-row"><div><b>${escape(p.name)}</b><br><small>${money(unitPrice(p))} / ${unitOf(p)} · ${money(unitPrice(p) * qty)}${qty > p.stock ? " · Stok azaldı, adedi düşür" : ""}</small></div>
+      <div class="qty"><button data-minus="${p.id}" aria-label="Bir ${unitOf(p)} çıkar">−</button><span>${qty} ${unitOf(p)}</span><button data-add="${p.id}" aria-label="Bir ${unitOf(p)} ekle" ${qty >= p.stock ? "disabled" : ""}>+</button></div></div>`).join("") +
     `<p><strong>Toplam ${money(orderTotal(entries))}</strong></p>`;
 }
 
@@ -232,7 +245,7 @@ function orderCard(order, seller) {
     : status === "Onay bekliyor" ? [{next:"İptal",label:"Talebi iptal et",kind:"pill reject"}] : [];
   return `<article class="order">
     <div class="order-top"><b>${escape(seller ? order.customer : order.maker)} · #${escape(order.id.slice(0, 8))}</b><span class="pill ${badge}">${escape(status)}</span></div>
-    <p>${order.items.map(item => `${item.qty} × ${escape(item.name)}`).join(", ")}</p>
+    <p>${order.items.map(item => `${item.qty} ${unitOf(item)} · ${escape(item.name)}`).join(", ")}</p>
     <p class="order-time">${escape(scheduled)}</p>
     <p class="muted">${escape(order.handoff)} · ${money(order.total)} · ${payment}</p>
     ${actions.length ? `<div class="order-actions">${actions.map(({next,label,kind}) => `<button class="${kind}" data-order="${escape(order.id)}" data-next="${next}">${next === "Tamamlandı" && !order.paymentMethod ? "Teslim edildi" : label}</button>`).join("")}</div>` : ""}
@@ -246,7 +259,7 @@ function render() {
   const seller = activeAccount?.role === "seller" ? activeAccount : null;
   byId("seller-name").textContent = seller?.name ?? "";
   byId("inventory").innerHTML = seller ? state.products.filter(p => ownerOf(p) === seller.id).map(p =>
-    `<div class="inventory-row"><div><b>${escape(p.name)}</b><br><small>${escape(p.maker)} · ${p.stock} adet · ${money(unitPrice(p))}</small></div><button class="pill" data-edit="${p.id}">Düzenle</button></div>`).join("") : "";
+    `<div class="inventory-row"><div><b>${escape(p.name)}</b><br><small>${p.stock} ${unitOf(p)} stok · ${money(unitPrice(p))} / ${unitOf(p)}</small></div><button class="pill" data-edit="${p.id}">Düzenle</button></div>`).join("") || '<p class="muted">Menünde henüz ürün yok.</p>' : "";
   byId("seller-orders").innerHTML = (seller ? state.orders.filter(o => ownerOf(o) === seller.id).map(o => orderCard(o, true)).join("") : "") ||
     '<p class="muted">Henüz sipariş yok.</p>';
   const customer = activeAccount?.role === "customer" ? activeAccount : null;
@@ -258,13 +271,13 @@ function render() {
 
 function changeQuantity(id, delta) {
   const p = findProduct(id);
-  if (!p) return;
+  if (!p || !Number.isSafeInteger(delta) || delta === 0) return;
   const qty = (state.cart[id] || 0) + delta;
-  if (qty > p.stock && delta > 0) return;
+  if (qty > p.stock && delta > 0) return notify("Sepete eklenebilecek en fazla miktar " + Math.max(0, p.stock - (state.cart[id] || 0)) + " " + unitOf(p) + ".");
   const next = structuredClone(state);
   if (qty > 0) next.cart[id] = qty;
   else delete next.cart[id];
-  update(next, delta > 0 ? "Sepete eklendi" : "");
+  update(next, delta > 0 ? `${delta} ${unitOf(p)} sepete eklendi` : "");
 }
 
 function renderProductPhoto() {
@@ -276,9 +289,24 @@ function renderProductPhoto() {
 
 function renderProductPoint() {
   byId("clear-product-location").hidden = !productPoint;
+  byId("product-area-center").value = productPoint?.areaIndex ?? "";
   byId("product-location-status").textContent = productPoint
-    ? "Konum eklendi. Müşteriler teslim bölgesini ve yaklaşık mesafeyi görür."
+    ? Number.isInteger(productPoint.areaIndex) ? "Örnek bölge merkezi teslim konumu olarak seçildi." :
+      "Cihaz konumu eklendi. Müşteriler yaklaşık mesafeyi görür."
     : "Yakındaki aramalarda çıkmak için teslim noktasında konum ekleyebilirsin.";
+}
+
+function hasPendingOrder(productId) {
+  return state.orders.some(order => orderStatus(order) === "Onay bekliyor" &&
+    order.items.some(item => item.id === productId));
+}
+
+function renderUnit() {
+  const select = byId("product-unit");
+  byId("stock-unit").textContent = select.value;
+  byId("price-unit").textContent = select.value;
+  byId("unit-note").textContent = select.disabled ? "Onay bekleyen sipariş varken satış birimi sabit kalır." :
+    "Fiyat ve stok seçilen birim içindir.";
 }
 
 function openProduct(product) {
@@ -286,15 +314,19 @@ function openProduct(product) {
   editorSession++;
   form.reset();
   form.elements.id.value = "";
-  form.elements.maker.value = activeAccount.name;
-  if (product) for (const field of ["id", "name", "maker", "category", "price", "stock", "details", "district", "neighborhood"]) {
+  byId("product-seller").textContent = activeAccount.name;
+  if (product) for (const field of ["id", "name", "category", "price", "stock", "details", "district", "neighborhood"]) {
     form.elements[field].value = product[field] ?? "";
   }
+  byId("product-unit").value = unitOf(product ?? {});
+  byId("product-unit").disabled = Boolean(product && hasPendingOrder(product.id));
+  renderUnit();
   productPoint = product?.point ?? null;
   productPhoto = photoPattern.test(product?.photo || "") ? product.photo : "";
   byId("save-product").disabled = false;
   byId("set-product-location").disabled = false;
   byId("clear-product-location").disabled = false;
+  byId("product-area-center").disabled = false;
   byId("photo-status").textContent = "JPG, PNG veya WebP · En fazla 12 MB";
   renderProductPhoto();
   renderProductPoint();
@@ -304,12 +336,19 @@ function openProduct(product) {
 
 function getDeviceLocation() {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) return reject(new Error("Tarayıcı konumu desteklemiyor. İlçe veya mahalle kullanabilirsin."));
+    const policy = document.permissionsPolicy ?? document.featurePolicy;
+    if (policy && !policy.allowsFeature("geolocation")) {
+      return reject(new Error("Bu görünüm konum erişimine izin vermiyor. Bağlantıyı cihazının tarayıcısında aç veya örnek konum seç."));
+    }
+    if (globalThis.isSecureContext === false || !navigator.geolocation) {
+      return reject(new Error("Cihaz konumu burada kullanılamıyor. Örnek konum seçebilirsin."));
+    }
     navigator.geolocation.getCurrentPosition(
       ({coords}) => resolve({lat:coords.latitude, lng:coords.longitude}),
       error => reject(new Error(error.code === 1
-        ? "Konum izni kapalı. Tarayıcı ayarlarından izin verebilir veya ilçe ve mahalleyle arayabilirsin."
-        : "Konum alınamadı. Tekrar deneyebilir veya ilçe ve mahalle kullanabilirsin.")),
+        ? "Konum izni verilmedi. Tarayıcı ve cihaz ayarlarında konuma izin ver veya örnek konum seç."
+        : error.code === 3 ? "Konum isteği zaman aşımına uğradı. Tekrar dene veya örnek konum seç."
+        : "Cihaz konumu alınamadı. Konum servislerini kontrol et veya örnek konum seç.")),
       {timeout:10000, maximumAge:30000},
     );
   });
@@ -347,28 +386,53 @@ byId("categories").innerHTML = categories.map(label => `<option>${label}</option
 byId("search").addEventListener("input", renderCatalog);
 byId("area-search").addEventListener("input", renderCatalog);
 byId("radius").addEventListener("change", renderCatalog);
+const initialLocationText = "İlçe veya mahalle yaz ya da mesafe hesabı için konum seç.";
+function setNearby(point, source, message) {
+  nearbyPoint = point;
+  nearbySource = source;
+  const button = byId("nearby");
+  button.setAttribute("aria-pressed", source === "device");
+  button.textContent = source === "device" ? "Cihaz konumunu kapat" : "Konumumu kullan";
+  byId("radius-label").hidden = !point;
+  byId("location-status").textContent = message;
+  renderCatalog();
+}
+
+const areaOptions = demoAreas.map((area, index) =>
+  `<option value="${index}">${area.district} · ${area.neighborhood}</option>`).join("");
+byId("area-center").insertAdjacentHTML("beforeend", areaOptions);
+byId("product-area-center").insertAdjacentHTML("beforeend", areaOptions);
+byId("product-unit").innerHTML = units.map(unit => `<option>${unit}</option>`).join("");
+byId("product-unit").addEventListener("change", renderUnit);
+byId("area-center").addEventListener("change", event => {
+  const area = demoAreas[event.currentTarget.value];
+  if (!area) {
+    setNearby(null, "", initialLocationText);
+    return;
+  }
+  setNearby(area.point, "area", `${area.neighborhood} merkezinden yaklaşık mesafeye göre sıralanıyor.`);
+});
 byId("nearby").addEventListener("click", async event => {
   const button = event.currentTarget;
-  const status = byId("location-status");
-  if (nearbyPoint) {
-    nearbyPoint = null;
-    status.textContent = "İlçe veya mahalle yaz ya da cihaz konumunu kullan.";
-  } else {
-    button.disabled = true;
-    status.textContent = "Konum alınıyor…";
-    try {
-      nearbyPoint = await getDeviceLocation();
-      status.textContent = "Konumu olan ürünler en yakından uzağa sıralanıyor.";
-    } catch (error) {
-      status.textContent = error.message;
-    } finally {
-      button.disabled = false;
-    }
+  if (nearbySource === "device") {
+    setNearby(null, "", initialLocationText);
+    return;
   }
-  button.setAttribute("aria-pressed", Boolean(nearbyPoint));
-  button.textContent = nearbyPoint ? "Konumu kapat" : "Konumumu kullan";
-  byId("radius-label").hidden = !nearbyPoint;
-  renderCatalog();
+  const area = byId("area-center");
+  button.disabled = true;
+  area.disabled = true;
+  byId("location-status").textContent = "Cihaz konumu alınıyor…";
+  try {
+    const point = await getDeviceLocation();
+    area.value = "";
+    setNearby(point, "device", "Cihaz konumuna göre en yakındaki ürünler gösteriliyor.");
+  } catch (error) {
+    byId("location-status").textContent = nearbySource === "area"
+      ? error.message + " Seçtiğin örnek konum kullanılıyor." : error.message;
+  } finally {
+    button.disabled = false;
+    area.disabled = false;
+  }
 });
 byId("product-photo").addEventListener("change", async event => {
   const field = event.currentTarget;
@@ -407,6 +471,7 @@ byId("set-product-location").addEventListener("click", async event => {
   const status = byId("product-location-status");
   button.disabled = true;
   byId("clear-product-location").disabled = true;
+  byId("product-area-center").disabled = true;
   status.textContent = "Konum alınıyor…";
   try {
     const point = await getDeviceLocation();
@@ -419,8 +484,22 @@ byId("set-product-location").addEventListener("click", async event => {
     if (session === editorSession) {
       button.disabled = false;
       byId("clear-product-location").disabled = false;
+      byId("product-area-center").disabled = false;
     }
   }
+});
+byId("product-area-center").addEventListener("change", event => {
+  const value = event.currentTarget.value;
+  const area = demoAreas[value];
+  if (area) {
+    productPoint = {...area.point, areaIndex:Number(value)};
+    const form = byId("product-form");
+    form.elements.district.value = area.district;
+    form.elements.neighborhood.value = area.neighborhood;
+  } else if (Number.isInteger(productPoint?.areaIndex)) {
+    productPoint = null;
+  }
+  renderProductPoint();
 });
 byId("clear-product-location").addEventListener("click", () => {
   productPoint = null;
@@ -491,6 +570,12 @@ document.addEventListener("click", event => {
     renderCatalog();
     Array.from(byId("filters").children).find(item => item.dataset.category === category)?.focus();
   }
+  if (data.bulk) {
+    const input = button.closest(".card").querySelector("[data-quantity]");
+    const quantity = input.valueAsNumber;
+    if (input.reportValidity() && Number.isSafeInteger(quantity) && quantity > 0) changeQuantity(data.bulk, quantity);
+    else if (!input.value) input.focus();
+  }
   if (data.add) changeQuantity(data.add, 1);
   if (data.minus) changeQuantity(data.minus, -1);
   if (data.edit && activeAccount?.role === "seller") {
@@ -507,18 +592,23 @@ byId("product-form").addEventListener("submit", event => {
   const fields = Object.fromEntries(new FormData(event.currentTarget));
   if (byId("save-product").disabled || byId("set-product-location").disabled) return;
   const name = fields.name.trim();
-  const maker = fields.maker.trim();
   const details = fields.details.trim();
-  if (!name || !maker || !details) return notify("Ürün adı, üretici ve açıklama alanlarını doldur.");
+  if (!name || !details) return notify("Ürün adı ve açıklama alanlarını doldur.");
   const next = structuredClone(state);
   const existing = next.products.find(p => p.id === fields.id);
   if (existing && ownerOf(existing) !== activeAccount.id) return;
-  const product = {id: existing?.id ?? uid(), sellerId:activeAccount.id, name, maker, details, category: fields.category,
+  const oldUnit = unitOf(existing ?? {});
+  const unit = fields.unit === undefined ? oldUnit : fields.unit;
+  if (!units.includes(unit)) return notify("Geçerli bir satış birimi seç.");
+  if (existing && unit !== oldUnit && hasPendingOrder(existing.id)) return notify("Onay bekleyen sipariş varken birim değiştirilemez.");
+  const removedFromCart = existing && unit !== oldUnit && Boolean(next.cart[existing.id]);
+  if (removedFromCart) delete next.cart[existing.id];
+  const product = {id: existing?.id ?? uid(), sellerId:activeAccount.id, name, maker:activeAccount.name, unit, details, category: fields.category,
     district: (fields.district ?? "").trim(), neighborhood: (fields.neighborhood ?? "").trim(),
     point: productPoint, photo: productPhoto, price: Number(fields.price), stock: Number(fields.stock), visual: existing?.category === fields.category ? existing.visual : icon[fields.category]};
   if (existing) Object.assign(existing, product);
   else next.products.unshift(product);
-  if (update(next, "Ürün kaydedildi")) byId("product-dialog").close();
+  if (update(next, removedFromCart ? "Ürün kaydedildi. Birim değiştiği için önceki sepet kalemi kaldırıldı." : "Ürün kaydedildi")) byId("product-dialog").close();
 });
 
 byId("checkout").addEventListener("submit", event => {
@@ -536,17 +626,17 @@ byId("checkout").addEventListener("submit", event => {
   const next = structuredClone(state);
   const byMaker = new Map();
   for (const {product, qty} of entries) {
-    const group = JSON.stringify([ownerOf(product), product.maker]);
+    const group = ownerOf(product);
     if (!byMaker.has(group)) byMaker.set(group, []);
     byMaker.get(group).push({product, qty});
     next.products.find(p => p.id === product.id).stock -= qty;
   }
   for (const items of byMaker.values()) {
     const {product} = items[0];
-    next.orders.unshift({id: uid(), maker:product.maker, sellerId:ownerOf(product),
+    next.orders.unshift({id: uid(), maker:makerOf(product), sellerId:ownerOf(product),
       customer:activeAccount.name, customerId:activeAccount.id, handoff:form.elements.handoff.value,
       deliveryDate:date, deliverySlot:slot, paymentMethod:"cash-on-delivery", status:"Onay bekliyor",
-      total:orderTotal(items), items:items.map(({product, qty}) => ({id:product.id, name:product.name, qty}))});
+      total:orderTotal(items), items:items.map(({product, qty}) => ({id:product.id, name:product.name, unit:unitOf(product), qty}))});
   }
   next.cart = {};
   if (update(next, "Sipariş üreticinin onayına gönderildi.")) {
