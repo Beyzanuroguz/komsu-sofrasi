@@ -5,15 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Ev yapımı yemek ve tatlıları keşfet, yerel üreticilerden sipariş ver.">
 <title>Komşu Sofrası • Evden sofrana</title>
-<link rel="stylesheet" href="style.css">
-<script type="module" src="app.js"></script>
+<link rel="stylesheet" href="/style.css">
+<script type="module" src="/app.js"></script>
 </head>
 <body>
 <header><div class="bar wrap">
 <button class="brand" data-view="shop"><span class="logo" aria-hidden="true">♨</span><span>Komşu Sofrası<small>EVDEN SOFRANA</small></span></button>
-<nav aria-label="Ana menü"><button data-view="shop" aria-current="page">Keşfet</button><button data-view="orders" id="customer-nav">Müşteri girişi</button><button data-view="seller">Üretici paneli</button><button id="account-button">Giriş yap</button><button class="dark" id="cart-button">Sepet <span id="count">0</span></button></nav>
+<nav aria-label="Ana menü"><button data-view="shop" id="shop-nav" aria-current="page">Keşfet</button><button data-view="orders" id="customer-nav">Müşteri girişi</button><button data-view="seller" id="seller-nav">Üretici paneli</button><button id="account-button">Giriş yap</button><button class="dark" id="cart-button">Sepet <span id="count">0</span></button>
+<a href="/test/musteri/" class="test-link" id="test-link">Test alanı</a></nav>
 </div></header>
 <main id="main" class="wrap">
+<section id="test-signin" class="test-signin" aria-labelledby="test-title" hidden>
+<div class="test-intro"><span class="eyebrow">KOMŞU SOFRASI · TEST ALANI</span><h1 id="test-title"></h1><p id="test-description"></p></div>
+<form class="panel test-form" id="test-login-form">
+<label>Kullanıcı adı<input name="username" maxlength="30" autocomplete="username" required></label>
+<label>Şifre<input name="password" type="password" maxlength="120" autocomplete="current-password" required></label>
+<button class="button wide" id="test-submit">Giriş yap</button><p id="test-error" class="form-note" role="status" hidden></p>
+</form>
+</section>
+<div id="test-banner" class="test-banner" hidden><strong id="test-account-label"></strong><span>Bu alanda sipariş, ödeme ve teslimat test amaçlıdır.</span><button type="button" class="pill" id="test-logout">Test hesabından çık</button></div>
 <p id="sync-status" class="muted sync-status" role="status" hidden></p>
 <section id="shop">
 <div class="hero">
@@ -30,7 +40,6 @@
 <button type="button" class="pill" id="nearby" aria-pressed="false">Konumumu kullan</button></div>
 </div>
 <div class="filters" id="filters" aria-label="Ürün kategorileri"></div>
-<div id="catalog-mode" class="catalog-mode" hidden><span class="muted" id="catalog-mode-note"></span><button type="button" class="pill" id="catalog-toggle" hidden>Örnek ürünleri göster</button></div>
 <p class="muted" id="results" aria-live="polite"></p>
 <div id="catalog" class="cards"></div>
 </section>
@@ -55,14 +64,14 @@
 <div class="seller-grid" id="seller-workspace" hidden><section class="panel"><h2>Gelen siparişler</h2><div id="seller-orders"></div></section><section class="panel"><h2>Menüm</h2><p class="muted form-note">Burada kendi ürünlerini düzenleyebilirsin.</p><div id="inventory"></div></section></div>
 </section>
 </main>
-<footer class="wrap"><b>Komşu Sofrası</b><span>Yerel mutfaklardan sofrana</span></footer>
+<footer class="wrap"><b>Komşu Sofrası</b><span>Yerel mutfaklardan sofrana</span><a id="test-attribution" href="/test-media/ATTRIBUTION.md" hidden>Fotoğraf kaynakları</a></footer>
 <dialog id="cart-dialog" aria-labelledby="cart-title">
 <div class="dialog-heading"><h2 id="cart-title">Sepetim</h2><button class="close" aria-label="Kapat" data-close>×</button></div>
 <div id="cart-lines"></div>
 <div id="cart-signin" hidden><p class="muted">Sipariş vermek için giriş yap.</p><a class="button wide" href="/signin-with-chatgpt?return_to=%2F%3Fview%3Dcheckout" target="_top">Müşteri girişi</a></div>
 <form id="checkout" hidden>
-<div class="fields"><label>Ad soyad<input name="customerName" id="customer-name" maxlength="70" required autocomplete="name"></label><label>Telefon<input type="tel" name="contact" autocomplete="tel" maxlength="26" required></label></div>
-<p class="muted form-note">Teslimat için iletişim bilgilerin yalnızca ilgili üreticiyle paylaşılır.</p>
+<div class="fields" id="customer-contact"><label>Ad soyad<input name="customerName" id="customer-name" maxlength="70" required autocomplete="name"></label><label>Telefon<input type="tel" name="contact" autocomplete="tel" maxlength="26" required></label></div>
+<p class="muted form-note" id="contact-note">Teslimat için iletişim bilgilerin yalnızca ilgili üreticiyle paylaşılır.</p>
 <label>Teslim şekli<select name="handoff" id="handoff"><option>Elden teslim</option><option>Teslimat talebi</option></select></label>
 <label id="delivery-address-label" hidden>Teslim adresi<textarea name="address" id="delivery-address" autocomplete="street-address" maxlength="240" rows="2" minlength="8"></textarea></label>
 <div class="fields"><label>Teslim tarihi<input id="delivery-date" name="date" type="date" required></label><label>Saat aralığı<select name="slot" id="delivery-slot" required></select></label></div>

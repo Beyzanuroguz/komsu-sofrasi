@@ -2,15 +2,10 @@ import { availableSlots, categories, closedStatuses, lastDeliveryDate, quantityS
 
 const byId = id => document.getElementById(id);
 const icon = {"Ana yemek":"🍲","Hamur işi":"🥟","Tatlı":"🍰","Meze":"🫒"};
-const examples = [
-  ["Fıstıklı ev baklavası", "Fatma’nın Mutfağı", "Tatlı", 780, "kg", "Beşiktaş", "Abbasağa", 41.05, 29.00, "İnce yufka ve Antep fıstığı. Gluten, süt ve fıstık içerir.", "🍯"],
-  ["Kayseri mantısı", "Ayşe’nin Mutfağı", "Ana yemek", 230, "porsiyon", "Kadıköy", "Moda", 40.98, 29.03, "Sarımsaklı yoğurt ve biber sosuyla. Gluten ve süt içerir.", "🥣"],
-  ["Ispanaklı kol böreği", "Zeynep’in Fırını", "Hamur işi", 180, "paket", "Üsküdar", "Kuzguncuk", 41.04, 29.03, "Bir pakette dört dilim. Gluten, süt ve yumurta içerir.", "🥟"],
-  ["Zeytinyağlı yaprak sarma", "Ayşe’nin Mutfağı", "Meze", 195, "paket", "Kadıköy", "Moda", 40.98, 29.03, "Bir pakette 12 sarma, limonla servis edilir.", "🫒"],
-  ["Fırın sütlaç", "Fatma’nın Mutfağı", "Tatlı", 95, "porsiyon", "Beşiktaş", "Abbasağa", 41.05, 29.00, "Üzeri kızarmış bir kâse sütlaç. Süt içerir.", "🍮"],
-  ["Ev usulü kuru fasulye", "Zeynep’in Fırını", "Ana yemek", 165, "porsiyon", "Üsküdar", "Kuzguncuk", 41.04, 29.03, "Pilavla servis edilir.", "🍛"],
-].map(([name,maker,category,price,unit,district,neighborhood,lat,lng,details,visual], index) =>
-  ({id:"example-" + index,name,maker,category,price,unit,district,neighborhood,point:{lat,lng},details,visual,example:true,stock:0}));
+const testRole = /^\/test\/(musteri|uretici)\//.exec(window.location.pathname)?.[1] ?? null;
+const testBuyer = testRole === "musteri";
+const testSeller = testRole === "uretici";
+const testPath = testRole ? "/test/" + testRole : "";
 const formatQuantity = new Intl.NumberFormat("tr-TR", {maximumFractionDigits:1});
 const quantityLabel = (value, item) => `${formatQuantity.format(value)} ${unitOf(item)}`;
 const slotLabel = slot => `${slot}–${String(Number(slot.slice(0, 2)) + 2).padStart(2, "0")}:00`;
@@ -24,7 +19,7 @@ const orderActions = {
   "Teslime hazır": [{next:"Tamamlandı", label:"Teslim edildi ve nakit alındı", kind:"button"}],
 };
 const scheduleDate = new Intl.DateTimeFormat("tr-TR", {dateStyle:"long", timeZone:"UTC"});
-const cartKey = "komsu-sofrasi-market-cart";
+const cartKey = "komsu-sofrasi-market-cart" + (testRole ? "-" + testRole : "");
 const state = {products:[], customerOrders:[], sellerOrders:[], account:null, cart:{}};
 let cartDraft = {};
 let checkoutId = "";
@@ -34,8 +29,7 @@ try {
   if (typeof saved?.checkoutId === "string") checkoutId = saved.checkoutId;
 } catch {}
 let shopReady = false;
-let currentView = "shop";
-let examplesSelected = false;
+let currentView = testSeller ? "seller" : "shop";
 let resumeCheckout = new URLSearchParams(window.location.search).get("view") === "checkout";
 let syncRequest = 0;
 let placingOrder = false;
@@ -47,7 +41,7 @@ let productPhoto = "";
 let editorSession = 0;
 let photoRequest = 0;
 const photoPattern = /^data:image\/jpeg;base64,[a-zA-Z0-9+/]+=*$/;
-const storedPhoto = /^\/photos\/[a-f0-9-]{36}\.jpg$/;
+const storedPhoto = /^\/(?:photos\/[a-f0-9-]{36}|test-media\/(?:baklava|manti|sarma))\.jpg$/;
 const validPhoto = value => photoPattern.test(value || "") || storedPhoto.test(value || "");
 const signIn = (view, label) => `<a class="button" href="/signin-with-chatgpt?return_to=${encodeURIComponent("/?view=" + view)}" target="_top">${label}</a>`;
 let toastTimeout;
@@ -85,7 +79,7 @@ function saveCart() {
 }
 
 async function api(path, data) {
-  const response = await fetch("/api/" + path, data === undefined ? {cache:"no-store"} : {
+  const response = await fetch(testPath + "/api/" + path, data === undefined ? {cache:"no-store"} : {
     method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(data),
   });
   let result;
@@ -146,14 +140,7 @@ function renderCatalog() {
   const query = normalize(byId("search").value);
   const area = normalize(byId("area-search").value);
   const radius = Number(byId("radius").value);
-  const showExamples = shopReady && (examplesSelected || !state.products.length);
-  const listings = showExamples ? examples : state.products;
-  const mode = byId("catalog-mode");
-  mode.hidden = !shopReady;
-  byId("catalog-mode-note").textContent = showExamples ? "Örnek katalog · Ürünler ve fiyatlar gösterim amaçlıdır." : "";
-  const toggle = byId("catalog-toggle");
-  toggle.hidden = !state.products.length;
-  toggle.textContent = examplesSelected ? "Gerçek ürünlere dön" : "Örnek ürünleri göster";
+  const listings = state.products;
   const regions = Array.from(new Set(listings.map(p => [p.district, p.neighborhood].filter(Boolean).join(" ")).filter(Boolean))).sort((a,b) => a.localeCompare(b, "tr"));
   const areaOptions = byId("area-options");
   areaOptions.innerHTML = '<option value="">Bölge seç</option>' + regions.map(region =>
@@ -171,7 +158,7 @@ function renderCatalog() {
   byId("filters").innerHTML = ["", ...categories].map(label =>
     `<button data-category="${escape(label)}" aria-pressed="${label === category}">${label || "Tümü"}</button>`).join("");
   byId("results").textContent = !shopReady ? "Ürünler yükleniyor…" :
-    matches.length ? `${matches.length} ${showExamples ? "örnek ürün" : "ürün"}` :
+    matches.length ? `${matches.length} ürün` : !listings.length ? "Henüz satışta ürün yok." :
     nearbyPoint ? "Bu mesafede ürün bulunamadı. Mesafeyi artırabilir veya konum filtresini kapatabilirsin." :
     "Aramana uygun ürün bulunamadı.";
   byId("catalog").innerHTML = matches.map(p => {
@@ -190,12 +177,12 @@ function renderCatalog() {
     return `<article class="card">
       <div class="food-visual" data-kind="${escape(p.category)}" aria-hidden="true">${visual}</div>
       <div class="card-body"><span class="eyebrow">${escape(p.category)}</span><h3>${escape(p.name)}</h3>
-      <span class="muted">${escape(p.maker)}${p.example ? ' · <span class="sample-tag">Örnek ürün</span>' : " · " + quantityLabel(p.stock, p)}</span>${location ? `<span class="food-place">⌖ ${escape(location)}</span>` : ""}<p>${escape(p.details)}</p>
+      <span class="muted">${escape(p.maker)} · ${quantityLabel(p.stock, p)}</span>${location ? `<span class="food-place">⌖ ${escape(location)}</span>` : ""}<p>${escape(p.details)}</p>
       <div class="card-bottom"><strong>${money(unitPrice(p))} <small class="unit-price">/ ${unit}</small></strong></div>
-      ${p.example ? "" : `<div class="purchase-controls"><label class="purchase-qty">${unit === "adet" ? "Adet" : "Miktar (" + unit + ")"}
+      <div class="purchase-controls"><label class="purchase-qty">${unit === "adet" ? "Adet" : "Miktar (" + unit + ")"}
         <input type="number" min="${step}" max="${Math.max(step, available)}" step="${step}" value="${available >= 1 ? 1 : step}" data-quantity
           aria-label="${escape(p.name + " miktarı (" + unit + ")")}" ${!own && available >= step ? "" : "disabled"}></label>
-        <button class="pill" data-bulk="${p.id}" aria-label="${escape(p.name + " · " + label)}" ${!own && available >= step ? "" : "disabled"}>${label}</button></div>`}</div>
+        <button class="pill" data-bulk="${p.id}" aria-label="${escape(p.name + " · " + label)}" ${!own && available >= step ? "" : "disabled"}>${label}</button></div></div>
     </article>`;
   }).join("");
 }
@@ -224,6 +211,9 @@ function renderCart() {
   byId("count").textContent = entries.reduce((total, item) => total + item.qty, 0);
   const isCustomer = Boolean(state.account);
   byId("checkout").hidden = !entries.length || !isCustomer;
+  byId("customer-contact").hidden = Boolean(testRole);
+  byId("contact-note").hidden = Boolean(testRole);
+  for (const input of byId("customer-contact").querySelectorAll("input")) input.required = !testRole;
   byId("cart-signin").hidden = !entries.length || isCustomer;
   if (entries.length && isCustomer) refreshSchedule();
   byId("cart-lines").innerHTML = !entries.length ? '<p class="muted">Sepetin boş. Keşfet ekranından ürün ekleyebilirsin.</p>' : entries.map(({product:p, qty}) =>
@@ -276,6 +266,18 @@ function render() {
   renderCart();
   const account = state.account;
   const kitchen = account?.kitchen;
+  renderView();
+  byId("test-signin").hidden = !testRole || Boolean(account);
+  byId("test-banner").hidden = !testRole || !account;
+  byId("test-account-label").textContent = testBuyer ? "Müşteri test hesabı" : "Üretici test hesabı";
+  byId("test-attribution").hidden = !testRole;
+  byId("test-link").textContent = testBuyer ? "Üretici testine geç" : testSeller ? "Müşteri testine geç" : "Test alanı";
+  byId("test-link").href = testBuyer ? "/test/uretici/" : "/test/musteri/";
+  byId("shop-nav").hidden = testSeller || Boolean(testRole && !account);
+  byId("seller-nav").hidden = testBuyer || Boolean(testRole && !account);
+  byId("customer-nav").hidden = testSeller || Boolean(testRole && !account);
+  byId("cart-button").hidden = testSeller || Boolean(testRole && !account);
+  byId("account-button").hidden = Boolean(testRole);
   byId("account-button").textContent = account ? "Hesabım" : "Giriş yap";
   byId("customer-nav").textContent = account ? "Siparişlerim" : "Müşteri girişi";
   byId("seller-name").textContent = kitchen?.name ?? "Üretici hesabı";
@@ -418,10 +420,6 @@ byId("area-options").addEventListener("change", event => {
   if (nearbyPoint) setNearby(null, initialLocationText);
   else renderCatalog();
 });
-byId("catalog-toggle").addEventListener("click", () => {
-  examplesSelected = !examplesSelected;
-  renderCatalog();
-});
 byId("radius").addEventListener("change", renderCatalog);
 const initialLocationText = "İlçe veya mahalle yaz ya da mesafe hesabı için konum seç.";
 function setNearby(point, message) {
@@ -508,13 +506,20 @@ byId("clear-product-location").addEventListener("click", () => {
   productPoint = null;
   renderProductPoint();
 });
-function showView(view) {
-  currentView = view;
-  for (const section of ["shop", "orders", "seller"]) byId(section).hidden = section !== view;
+function renderView() {
+  for (const section of ["shop", "orders", "seller"]) {
+    byId(section).hidden = section !== currentView || Boolean(testRole && !state.account);
+  }
   for (const tab of document.querySelectorAll("nav [data-view]")) {
-    if (tab.dataset.view === view) tab.setAttribute("aria-current", "page");
+    if (tab.dataset.view === currentView) tab.setAttribute("aria-current", "page");
     else tab.removeAttribute("aria-current");
   }
+}
+
+function showView(view) {
+  if ((testBuyer && view === "seller") || (testSeller && view !== "seller")) return;
+  currentView = view;
+  renderView();
   window.scrollTo(0, 0);
   if (view !== "shop") void syncShop();
 }
@@ -529,18 +534,48 @@ function openAccount() {
 }
 
 function renderHandoff() {
-  const delivery = byId("handoff").value === "Teslimat talebi";
+  const delivery = !testRole && byId("handoff").value === "Teslimat talebi";
   byId("delivery-address-label").hidden = !delivery;
   byId("delivery-address").required = delivery;
 }
 
 function openCart() {
+  if (testRole && (!state.account || testSeller)) return;
   if (!byId("customer-name").value) byId("customer-name").value = state.account?.name ?? "";
   renderHandoff();
   renderCart();
   if (!byId("cart-dialog").open) byId("cart-dialog").showModal();
 }
 byId("cart-button").addEventListener("click", openCart);
+byId("test-login-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!testRole) return;
+  const button = byId("test-submit");
+  if (button.disabled) return;
+  const form = event.currentTarget;
+  const fields = Object.fromEntries(new FormData(form));
+  const message = byId("test-error");
+  message.hidden = true;
+  button.disabled = true;
+  try {
+    await api("login", fields);
+    await syncShop();
+    if (!state.account) throw new Error("Oturum açılamadı. Bağlantıyı cihazının tarayıcısında açıp tekrar dene.");
+    form.reset();
+  } catch (error) {
+    message.textContent = error.message;
+    message.hidden = false;
+  } finally {
+    button.disabled = false;
+  }
+});
+byId("test-logout").addEventListener("click", async () => {
+  try {
+    await api("logout", {});
+    currentView = testSeller ? "seller" : "shop";
+    await syncShop();
+  } catch (error) { notify(error.message); }
+});
 byId("account-button").addEventListener("click", openAccount);
 byId("delivery-date").addEventListener("change", refreshSchedule);
 byId("handoff").addEventListener("change", renderHandoff);
@@ -674,5 +709,12 @@ setInterval(() => {
 }, 30000);
 render();
 const requestedView = new URLSearchParams(window.location.search).get("view");
-if (["orders", "seller"].includes(requestedView)) showView(requestedView);
+if (testRole) {
+  document.documentElement.dataset.testRole = testRole;
+  byId("test-title").textContent = testBuyer ? "Müşteri girişi" : "Üretici girişi";
+  byId("test-description").textContent = testBuyer
+    ? "Fotoğraflı menüyü keşfet, sepete ürün ekle ve test siparişini takip et."
+    : "Gelen test siparişlerini onayla, hazırlık ve teslim adımlarını dene.";
+  void syncShop();
+} else if (["orders", "seller"].includes(requestedView)) showView(requestedView);
 else void syncShop();

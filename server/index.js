@@ -1,5 +1,7 @@
 import { availableSlots, categories, closedStatuses, units, validQuantity } from "../public/rules.js";
 
+import { readTestActor, seedTestKitchen, signIntoTest, signOutOfTest, testKitchen } from "./test-access.js";
+
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -66,13 +68,16 @@ async function kitchenFor(db, actor) {
   return actor ? db.prepare("SELECT id, name FROM kitchens WHERE owner_id = ?").bind(actor.id).first() : null;
 }
 
+const staticPhotos = {"test-baklava":"/test-media/baklava.jpg","test-manti":"/test-media/manti.jpg","test-sarma":"/test-media/sarma.jpg"};
+const photoPath = key => key ? staticPhotos[key] ?? "/photos/" + key : "";
+
 function productView(p) {
   return {
     id:p.id, sellerId:p.kitchen_id, maker:p.maker, name:p.name, category:p.category,
     price:p.price_cents / 100, stock:p.stock, unit:p.unit, details:p.details,
     district:p.district, neighborhood:p.neighborhood, revision:p.revision,
     point:p.latitude == null ? null : {lat:p.latitude, lng:p.longitude},
-    photo:p.photo_key ? "/photos/" + p.photo_key : "",
+    photo:photoPath(p.photo_key),
   };
 }
 
@@ -80,7 +85,7 @@ async function marketplace(db, actor) {
   const [kitchen, products, orders] = await Promise.all([
     kitchenFor(db, actor),
     rowList(db.prepare(`SELECT p.*, k.name maker FROM products p JOIN kitchens k ON k.id=p.kitchen_id
-      ORDER BY p.created_at DESC, p.id`)),
+      WHERE (p.kitchen_id = ?) = ? ORDER BY p.created_at DESC, p.id`).bind(testKitchen, actor?.test ? 1 : 0)),
     actor ? rowList(db.prepare(`SELECT o.*, k.name maker, k.pickup_note, k.owner_id
       FROM orders o JOIN kitchens k ON k.id=o.kitchen_id
       WHERE o.customer_id=? OR k.owner_id=? ORDER BY o.created_at DESC, o.id`).bind(actor.id, actor.id)) : [],
@@ -103,7 +108,7 @@ async function marketplace(db, actor) {
     paymentMethod:"cash-on-delivery", total:o.total_cents, items:items.get(o.id) ?? [],
   });
   return {
-    account:actor ? {name:actor.name, kitchen} : null,
+    account:actor ? {name:actor.name, kitchen, test:actor.test ?? null} : null,
     products:products.map(productView),
     customerOrders:orders.filter(o => o.customer_id === actor.id).map(o => orderView(o, false)),
     sellerOrders:orders.filter(o => o.owner_id === actor.id).map(o => orderView(o, true)),
@@ -144,7 +149,7 @@ async function saveProduct(env, actor, body) {
       !validQuantity(stock, {unit}) || stock < 0 || stock > 9999) fail(400, "Ürün, fiyat ve stok bilgilerini kontrol et.");
   const [latitude, longitude] = coordinates(body.point);
   let photoKey = null, newPhoto = null;
-  if (product?.photo_key && body.photo === "/photos/" + product.photo_key) {
+  if (product?.photo_key && body.photo === photoPath(product.photo_key)) {
     photoKey = product.photo_key;
   } else if (body.photo) {
     if (typeof body.photo !== "string" || body.photo.length > 400000 ||
@@ -175,7 +180,7 @@ async function saveProduct(env, actor, body) {
     if (String(error.message).includes("reserved_unit")) fail(409, "Onay bekleyen sipariş varken birim değiştirilemez.");
     throw error;
   }
-  if (product?.photo_key && product.photo_key !== photoKey) await env.BUCKET.delete(product.photo_key).catch(() => {});
+  if (product?.photo_key && !staticPhotos[product.photo_key] && product.photo_key !== photoKey) await env.BUCKET.delete(product.photo_key).catch(() => {});
   return json({ok:true});
 }
 
@@ -187,9 +192,10 @@ async function placeOrder(db, actor, body) {
   if (previous) fail(409, "Siparişi tekrar dene.");
   if (!availableSlots(deliveryDate).includes(deliverySlot)) fail(400, "Geçerli bir teslim tarihi ve saat aralığı seç.");
   if (!["Elden teslim", "Teslimat talebi"].includes(handoff)) fail(400, "Teslim şeklini seç.");
-  const customerName = clean(body.customerName, 70);
-  const contact = clean(body.contact, 26);
-  const address = handoff === "Teslimat talebi" ? clean(body.address, 240) : "";
+  const customerName = actor.test ? actor.name : clean(body.customerName, 70);
+  const contact = actor.test ? "0555 000 00 00" : clean(body.contact, 26);
+  const address = handoff === "Teslimat talebi"
+    ? actor.test ? "Test teslimat adresi · Fiziksel teslimat yapılmaz." : clean(body.address, 240) : "";
   const digits = contact.replace(/\D/g, "");
   if (!customerName || !/^[+\d ()-]+$/.test(contact) || digits.length < 10 || digits.length > 15 ||
       (handoff === "Teslimat talebi" && address.length < 8)) fail(400, "Ad, telefon ve teslim bilgilerini kontrol et.");
@@ -204,7 +210,7 @@ async function placeOrder(db, actor, body) {
   const groups = new Map();
   for (const item of items) {
     const product = byId.get(item.id);
-    if (!product || product.revision !== item.revision || product.stock < item.qty) fail(409, "Bir ürünün fiyatı, birimi veya stoğu değişti. Sepeti kontrol et.");
+    if (!product || (product.kitchen_id === testKitchen) !== Boolean(actor.test) || product.revision !== item.revision || product.stock < item.qty) fail(409, "Bir ürünün fiyatı, birimi veya stoğu değişti. Sepeti kontrol et.");
     if (!validQuantity(item.qty, product) || item.qty <= 0) fail(400, "Sepetindeki miktarları kontrol et.");
     if (product.owner_id === actor.id) fail(400, "Kendi mutfağından sipariş veremezsin.");
     if (!groups.has(product.kitchen_id)) groups.set(product.kitchen_id, []);
@@ -256,11 +262,43 @@ async function servePhoto(env, path) {
   return new Response(photo.body, {headers:{"Content-Type":"image/jpeg","Cache-Control":"private, max-age=3600","X-Content-Type-Options":"nosniff"}});
 }
 
+function respondCookie(cookie) {
+  const response = json({ok:true});
+  response.headers.set("Set-Cookie", cookie);
+  return response;
+}
+
 export default {
   async fetch(request, env) {
-    const path = new URL(request.url).pathname;
+    let path = new URL(request.url).pathname;
     try {
-      const actor = identity(request);
+      let actor = identity(request);
+      const test = /^\/test\/(musteri|uretici)(\/.*)?$/.exec(path);
+      if (test) {
+        if (!actor) fail(401, "Test alanına erişmek için önce siteye giriş yap.");
+        const role = test[1];
+        path = test[2] || "/";
+        if (!test[2] && request.method === "GET") return Response.redirect(new URL(request.url).origin + "/test/" + role + "/", 302);
+        if (request.method === "POST" && path === "/api/login") {
+          const cookie = await signIntoTest(env, actor, role, await readBody(request));
+          if (!cookie) fail(401, "Kullanıcı adı veya şifre hatalı.");
+          await seedTestKitchen(env.DB);
+          return respondCookie(cookie);
+        }
+        if (request.method === "POST" && path === "/api/logout") {
+          await readBody(request);
+          return respondCookie(signOutOfTest(role));
+        }
+        actor = await readTestActor(env, actor, role, request.headers.get("Cookie"));
+        if (path === "/api/shop" && request.method === "GET" && !actor) {
+          return json({account:null,products:[],customerOrders:[],sellerOrders:[]});
+        }
+        if (path.startsWith("/api/") && request.method === "POST" && actor) {
+          const permitted = role === "musteri"
+            ? ["/api/order", "/api/order-status"] : ["/api/product", "/api/order-status"];
+          if (!permitted.includes(path)) fail(403, "Bu işlem hesabının rolüne açık değil.");
+        }
+      }
       if (request.method === "GET" && path.startsWith("/photos/")) return await servePhoto(env, path);
       if (request.method === "GET" && path === "/api/shop") return json(await marketplace(env.DB, actor));
       if (path.startsWith("/api/") && request.method === "POST") {
@@ -273,9 +311,10 @@ export default {
       }
       if (request.method !== "GET" || !Object.hasOwn(assets, path)) fail(404, "Sayfa bulunamadı.");
       const [type, value] = assets[path];
-      const content = path === "/hero.jpg" ? Uint8Array.from(atob(value), char => char.charCodeAt(0)) : value;
+      const image = type === "image/jpeg";
+      const content = image ? Uint8Array.from(atob(value), char => char.charCodeAt(0)) : value;
       return new Response(content, {headers:{
-        "Content-Type":type, "X-Content-Type-Options":"nosniff", "Cache-Control":path === "/hero.jpg" ? "public, max-age=86400" : "no-cache",
+        "Content-Type":type, "X-Content-Type-Options":"nosniff", "Cache-Control":image ? "public, max-age=86400" : "no-cache",
         "Content-Security-Policy":"default-src 'self'; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'self'",
       }});
     } catch (error) {

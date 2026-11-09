@@ -9,7 +9,13 @@ Ev yapımı yemek, tatlı ve hamur işleri için sipariş uygulaması. Müşteri
 3. Başka bir yetkili hesapla **Müşteri girişi** üzerinden giriş yap. **Keşfet** ekranından ürünü sepete ekle. Teslim şekli, tarih ve saat seçip siparişi onaya gönder.
 4. Üretici hesabında **Gelen siparişler** bölümünden talebi onayla veya reddet. Teslim sırasında nakit alındığında üretici siparişi tamamlar.
 
-Gerçek katalog boşken etiketli örnek ürünler gösterilir. Bunlar siparişe veya sunucu kayıtlarına girmez. Gerçek ürün eklendiğinde örnek katalog isteğe bağlı açılabilir. Cihaz konumu yanıt vermezse katalogdaki bölgelerden biriyle filtreleme yapılabilir. Önceki prototip siparişleri sunucuya aktarılmaz. Ödeme yöntemi teslimde nakittir.
+Gerçek katalog üreticilerin yayımladığı ürünlerle doldurulur. Cihaz konumu yanıt vermezse katalogdaki bölgelerden biriyle filtreleme yapılabilir. Önceki prototip siparişleri sunucuya aktarılmaz. Gerçek siparişler için ödeme yöntemi teslimde nakittir.
+
+## Şifreli test alanı
+
+Siteye erişimi olan kişi `/test/musteri/` adresinde `musteri`, `/test/uretici/` adresinde `uretici` hesabıyla giriş yapabilir. Her rolün oturumu kendi yolunda saklanır. Böylece aynı tarayıcıdaki iki sekmede müşteri sipariş verebilir ve üretici onaylayabilir. İlk başarılı giriş, test mutfağını ve fotoğraflı ürünlerini veritabanına bir kez ekler. Test siparişleri gerçek katalog ve siparişlerden ayrıdır. Fotoğraf kaynakları [test kataloğu atıflarında](public/test-media/ATTRIBUTION.md) listelenir.
+
+Test girişini etkinleştirmek için Sites ortamında `TEST_CREDENTIALS` adlı bir secret tanımlanır. JSON biçimi, `key` alanında 64 karakterlik rastgele hex anahtar ve `hashes` altında `musteri` ile `uretici` için ayrı SHA-256 parola özetleri içerir. Test şifreleri ve imza anahtarı kaynak kodda saklanmaz.
 
 ## Geliştirme ve yayın
 

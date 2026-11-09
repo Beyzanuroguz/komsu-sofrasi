@@ -135,5 +135,12 @@ form input,select,textarea{width:100%;min-width:0;border:1px solid #aeb5a8;backg
 .account-options a{text-decoration:none}
 @media(max-width:710px){.order-history{grid-template-columns:1fr}.bar{flex-wrap:wrap;padding:9px 0;gap:4px}.bar nav{flex-wrap:wrap}}
 
-.catalog-mode{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:12px}
-.sample-tag{display:inline-block;color:#6f4a21;background:#f3e7d1;border-radius:20px;padding:2px 7px;font-weight:650}
+
+.test-link{font-size:13px;font-weight:700;color:var(--green);text-decoration:underline;text-underline-offset:3px;padding:7px 5px}
+.test-signin{display:grid;grid-template-columns:1fr minmax(260px,390px);gap:24px;align-items:center;padding:38px;margin:28px 0;background:#eeeddf;border-radius:24px}
+[data-test-role="uretici"] .test-signin{background:#e5ead9}
+.test-form{padding:20px}
+.test-form p{color:#812f20}
+.test-banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#e5ead9;padding:10px 14px;border-radius:12px;margin:18px 0;font-size:14px}
+.test-banner button{margin-left:auto}
+@media(max-width:680px){.test-signin{grid-template-columns:1fr;padding:22px}}
