@@ -6,10 +6,10 @@ Ev yapımı yemek, tatlı ve hamur işleri için sipariş uygulaması. Müşteri
 
 1. Siteye hesabınla giriş yap. **Üretici paneli** bölümünden mutfağını aç. Elden teslim bilgisi, onaylanmış elden teslim siparişlerinin müşterilerine gösterilir.
 2. Ürün adı, fiyat, stok ve satış birimini gir. İstersen fotoğraf ve yaklaşık teslim bölgesi ekle. Kilogramla satılan ürünler yarım kilo adımlarıyla sipariş edilebilir.
-3. Başka bir yetkili hesapla **Keşfet** ekranından ürünü sepete ekle. Teslim şekli, tarih ve saat seçip siparişi onaya gönder.
+3. Başka bir yetkili hesapla **Müşteri girişi** üzerinden giriş yap. **Keşfet** ekranından ürünü sepete ekle. Teslim şekli, tarih ve saat seçip siparişi onaya gönder.
 4. Üretici hesabında **Gelen siparişler** bölümünden talebi onayla veya reddet. Teslim sırasında nakit alındığında üretici siparişi tamamlar.
 
-Uygulama ilk açılışta boş katalogla başlar. Önceki prototipteki örnek ürünler, tarayıcıya kayıtlı siparişler ve demo hesaplar sunucuya aktarılmaz. Ödeme yöntemi teslimde nakittir.
+Gerçek katalog boşken etiketli örnek ürünler gösterilir. Bunlar siparişe veya sunucu kayıtlarına girmez. Gerçek ürün eklendiğinde örnek katalog isteğe bağlı açılabilir. Cihaz konumu yanıt vermezse katalogdaki bölgelerden biriyle filtreleme yapılabilir. Önceki prototip siparişleri sunucuya aktarılmaz. Ödeme yöntemi teslimde nakittir.
 
 ## Geliştirme ve yayın
 

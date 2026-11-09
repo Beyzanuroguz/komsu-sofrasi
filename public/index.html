@@ -11,7 +11,7 @@
 <body>
 <header><div class="bar wrap">
 <button class="brand" data-view="shop"><span class="logo" aria-hidden="true">♨</span><span>Komşu Sofrası<small>EVDEN SOFRANA</small></span></button>
-<nav aria-label="Ana menü"><button data-view="shop" aria-current="page">Keşfet</button><button data-view="orders">Siparişlerim</button><button data-view="seller">Üretici paneli</button><button id="account-button">Giriş yap</button><button class="dark" id="cart-button">Sepet <span id="count">0</span></button></nav>
+<nav aria-label="Ana menü"><button data-view="shop" aria-current="page">Keşfet</button><button data-view="orders" id="customer-nav">Müşteri girişi</button><button data-view="seller">Üretici paneli</button><button id="account-button">Giriş yap</button><button class="dark" id="cart-button">Sepet <span id="count">0</span></button></nav>
 </div></header>
 <main id="main" class="wrap">
 <p id="sync-status" class="muted sync-status" role="status" hidden></p>
@@ -25,10 +25,12 @@
 <div class="location-box">
 <div class="location-intro"><span class="location-mark" aria-hidden="true">⌖</span><div><strong>Yakınındaki lezzetler</strong><p class="muted" id="location-status" role="status">İlçe veya mahalle yaz ya da cihaz konumunu kullan.</p></div></div>
 <div class="location-controls"><label><span class="sr-only">İlçe veya mahalle</span><input id="area-search" type="search" placeholder="İlçe veya mahalle"></label>
+<label><span class="sr-only">Katalogdaki teslim bölgeleri</span><select id="area-options"><option value="">Bölge seç</option></select></label>
 <label id="radius-label" hidden><span class="sr-only">Arama yarıçapı</span><select id="radius"><option value="2">2 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="25">25 km</option></select></label>
 <button type="button" class="pill" id="nearby" aria-pressed="false">Konumumu kullan</button></div>
 </div>
 <div class="filters" id="filters" aria-label="Ürün kategorileri"></div>
+<div id="catalog-mode" class="catalog-mode" hidden><span class="muted" id="catalog-mode-note"></span><button type="button" class="pill" id="catalog-toggle" hidden>Örnek ürünleri göster</button></div>
 <p class="muted" id="results" aria-live="polite"></p>
 <div id="catalog" class="cards"></div>
 </section>
@@ -57,7 +59,7 @@
 <dialog id="cart-dialog" aria-labelledby="cart-title">
 <div class="dialog-heading"><h2 id="cart-title">Sepetim</h2><button class="close" aria-label="Kapat" data-close>×</button></div>
 <div id="cart-lines"></div>
-<div id="cart-signin" hidden><p class="muted">Sipariş vermek için giriş yap.</p><a class="button wide" href="/signin-with-chatgpt?return_to=%2F" target="_top">ChatGPT ile giriş yap</a></div>
+<div id="cart-signin" hidden><p class="muted">Sipariş vermek için giriş yap.</p><a class="button wide" href="/signin-with-chatgpt?return_to=%2F%3Fview%3Dcheckout" target="_top">Müşteri girişi</a></div>
 <form id="checkout" hidden>
 <div class="fields"><label>Ad soyad<input name="customerName" id="customer-name" maxlength="70" required autocomplete="name"></label><label>Telefon<input type="tel" name="contact" autocomplete="tel" maxlength="26" required></label></div>
 <p class="muted form-note">Teslimat için iletişim bilgilerin yalnızca ilgili üreticiyle paylaşılır.</p>

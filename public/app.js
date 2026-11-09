@@ -2,6 +2,15 @@ import { availableSlots, categories, closedStatuses, lastDeliveryDate, quantityS
 
 const byId = id => document.getElementById(id);
 const icon = {"Ana yemek":"🍲","Hamur işi":"🥟","Tatlı":"🍰","Meze":"🫒"};
+const examples = [
+  ["Fıstıklı ev baklavası", "Fatma’nın Mutfağı", "Tatlı", 780, "kg", "Beşiktaş", "Abbasağa", 41.05, 29.00, "İnce yufka ve Antep fıstığı. Gluten, süt ve fıstık içerir.", "🍯"],
+  ["Kayseri mantısı", "Ayşe’nin Mutfağı", "Ana yemek", 230, "porsiyon", "Kadıköy", "Moda", 40.98, 29.03, "Sarımsaklı yoğurt ve biber sosuyla. Gluten ve süt içerir.", "🥣"],
+  ["Ispanaklı kol böreği", "Zeynep’in Fırını", "Hamur işi", 180, "paket", "Üsküdar", "Kuzguncuk", 41.04, 29.03, "Bir pakette dört dilim. Gluten, süt ve yumurta içerir.", "🥟"],
+  ["Zeytinyağlı yaprak sarma", "Ayşe’nin Mutfağı", "Meze", 195, "paket", "Kadıköy", "Moda", 40.98, 29.03, "Bir pakette 12 sarma, limonla servis edilir.", "🫒"],
+  ["Fırın sütlaç", "Fatma’nın Mutfağı", "Tatlı", 95, "porsiyon", "Beşiktaş", "Abbasağa", 41.05, 29.00, "Üzeri kızarmış bir kâse sütlaç. Süt içerir.", "🍮"],
+  ["Ev usulü kuru fasulye", "Zeynep’in Fırını", "Ana yemek", 165, "porsiyon", "Üsküdar", "Kuzguncuk", 41.04, 29.03, "Pilavla servis edilir.", "🍛"],
+].map(([name,maker,category,price,unit,district,neighborhood,lat,lng,details,visual], index) =>
+  ({id:"example-" + index,name,maker,category,price,unit,district,neighborhood,point:{lat,lng},details,visual,example:true,stock:0}));
 const formatQuantity = new Intl.NumberFormat("tr-TR", {maximumFractionDigits:1});
 const quantityLabel = (value, item) => `${formatQuantity.format(value)} ${unitOf(item)}`;
 const slotLabel = slot => `${slot}–${String(Number(slot.slice(0, 2)) + 2).padStart(2, "0")}:00`;
@@ -26,6 +35,8 @@ try {
 } catch {}
 let shopReady = false;
 let currentView = "shop";
+let examplesSelected = false;
+let resumeCheckout = new URLSearchParams(window.location.search).get("view") === "checkout";
 let syncRequest = 0;
 let placingOrder = false;
 let editorProduct = null;
@@ -38,7 +49,7 @@ let photoRequest = 0;
 const photoPattern = /^data:image\/jpeg;base64,[a-zA-Z0-9+/]+=*$/;
 const storedPhoto = /^\/photos\/[a-f0-9-]{36}\.jpg$/;
 const validPhoto = value => photoPattern.test(value || "") || storedPhoto.test(value || "");
-const signIn = '<a class="button" href="/signin-with-chatgpt?return_to=%2F" target="_top">ChatGPT ile giriş yap</a>';
+const signIn = (view, label) => `<a class="button" href="/signin-with-chatgpt?return_to=${encodeURIComponent("/?view=" + view)}" target="_top">${label}</a>`;
 let toastTimeout;
 const formatMoney = new Intl.NumberFormat("tr-TR", {style: "currency", currency: "TRY"});
 const money = cents => formatMoney.format(cents / 100);
@@ -105,6 +116,10 @@ async function syncShop() {
     shopReady = true;
     byId("sync-status").hidden = true;
     render();
+    if (resumeCheckout && state.account) {
+      resumeCheckout = false;
+      openCart();
+    }
   } catch (error) {
     if (sequence !== syncRequest) return;
     const status = byId("sync-status");
@@ -131,7 +146,21 @@ function renderCatalog() {
   const query = normalize(byId("search").value);
   const area = normalize(byId("area-search").value);
   const radius = Number(byId("radius").value);
-  const products = state.products.filter(p => {
+  const showExamples = shopReady && (examplesSelected || !state.products.length);
+  const listings = showExamples ? examples : state.products;
+  const mode = byId("catalog-mode");
+  mode.hidden = !shopReady;
+  byId("catalog-mode-note").textContent = showExamples ? "Örnek katalog · Ürünler ve fiyatlar gösterim amaçlıdır." : "";
+  const toggle = byId("catalog-toggle");
+  toggle.hidden = !state.products.length;
+  toggle.textContent = examplesSelected ? "Gerçek ürünlere dön" : "Örnek ürünleri göster";
+  const regions = Array.from(new Set(listings.map(p => [p.district, p.neighborhood].filter(Boolean).join(" ")).filter(Boolean))).sort((a,b) => a.localeCompare(b, "tr"));
+  const areaOptions = byId("area-options");
+  areaOptions.innerHTML = '<option value="">Bölge seç</option>' + regions.map(region =>
+    `<option value="${escape(region)}">${escape(region)}</option>`).join("");
+  areaOptions.hidden = !regions.length;
+  areaOptions.value = regions.includes(byId("area-search").value) ? byId("area-search").value : "";
+  const products = listings.filter(p => {
     const location = normalize([p.district, p.neighborhood].filter(Boolean).join(" "));
     return (!category || p.category === category) && location.includes(area) &&
       normalize(p.name + " " + p.maker).includes(query);
@@ -141,8 +170,8 @@ function renderCatalog() {
     : products;
   byId("filters").innerHTML = ["", ...categories].map(label =>
     `<button data-category="${escape(label)}" aria-pressed="${label === category}">${label || "Tümü"}</button>`).join("");
-  byId("results").textContent = !shopReady ? "Ürünler yükleniyor…" : !state.products.length ?
-    "Henüz satışta ürün yok." : matches.length ? `${matches.length} ürün` :
+  byId("results").textContent = !shopReady ? "Ürünler yükleniyor…" :
+    matches.length ? `${matches.length} ${showExamples ? "örnek ürün" : "ürün"}` :
     nearbyPoint ? "Bu mesafede ürün bulunamadı. Mesafeyi artırabilir veya konum filtresini kapatabilirsin." :
     "Aramana uygun ürün bulunamadı.";
   byId("catalog").innerHTML = matches.map(p => {
@@ -161,12 +190,12 @@ function renderCatalog() {
     return `<article class="card">
       <div class="food-visual" data-kind="${escape(p.category)}" aria-hidden="true">${visual}</div>
       <div class="card-body"><span class="eyebrow">${escape(p.category)}</span><h3>${escape(p.name)}</h3>
-      <span class="muted">${escape(p.maker)} · ${quantityLabel(p.stock, p)}</span>${location ? `<span class="food-place">⌖ ${escape(location)}</span>` : ""}<p>${escape(p.details)}</p>
+      <span class="muted">${escape(p.maker)}${p.example ? ' · <span class="sample-tag">Örnek ürün</span>' : " · " + quantityLabel(p.stock, p)}</span>${location ? `<span class="food-place">⌖ ${escape(location)}</span>` : ""}<p>${escape(p.details)}</p>
       <div class="card-bottom"><strong>${money(unitPrice(p))} <small class="unit-price">/ ${unit}</small></strong></div>
-      <div class="purchase-controls"><label class="purchase-qty">${unit === "adet" ? "Adet" : "Miktar (" + unit + ")"}
+      ${p.example ? "" : `<div class="purchase-controls"><label class="purchase-qty">${unit === "adet" ? "Adet" : "Miktar (" + unit + ")"}
         <input type="number" min="${step}" max="${Math.max(step, available)}" step="${step}" value="${available >= 1 ? 1 : step}" data-quantity
           aria-label="${escape(p.name + " miktarı (" + unit + ")")}" ${!own && available >= step ? "" : "disabled"}></label>
-        <button class="pill" data-bulk="${p.id}" aria-label="${escape(p.name + " · " + label)}" ${!own && available >= step ? "" : "disabled"}>${label}</button></div></div>
+        <button class="pill" data-bulk="${p.id}" aria-label="${escape(p.name + " · " + label)}" ${!own && available >= step ? "" : "disabled"}>${label}</button></div>`}</div>
     </article>`;
   }).join("");
 }
@@ -248,15 +277,16 @@ function render() {
   const account = state.account;
   const kitchen = account?.kitchen;
   byId("account-button").textContent = account ? "Hesabım" : "Giriş yap";
+  byId("customer-nav").textContent = account ? "Siparişlerim" : "Müşteri girişi";
   byId("seller-name").textContent = kitchen?.name ?? "Üretici hesabı";
-  byId("seller-account").innerHTML = shopReady && !account ? `<div class="account-gate">Mutfağını açmak için giriş yap. ${signIn}</div>` : "";
+  byId("seller-account").innerHTML = shopReady && !account ? `<div class="account-gate">Mutfağını açmak için giriş yap. ${signIn("seller", "Üretici girişi")}</div>` : "";
   byId("kitchen-form").hidden = !account || Boolean(kitchen);
   byId("seller-workspace").hidden = !kitchen;
   byId("new-product").hidden = !kitchen;
   byId("inventory").innerHTML = kitchen ? state.products.filter(p => p.sellerId === kitchen.id).map(p =>
     `<div class="inventory-row"><div><b>${escape(p.name)}</b><br><small>${quantityLabel(p.stock, p)} stok · ${money(unitPrice(p))} / ${unitOf(p)}</small></div><button class="pill" data-edit="${p.id}">Düzenle</button></div>`).join("") || '<p class="muted">Menünde henüz ürün yok.</p>' : "";
   renderSellerOrders();
-  byId("orders-account").innerHTML = shopReady && !account ? `<div class="account-gate">Siparişlerini görmek için giriş yap. ${signIn}</div>` : "";
+  byId("orders-account").innerHTML = shopReady && !account ? `<div class="account-gate">Sipariş vermek ve geçmiş siparişlerini görmek için giriş yap. ${signIn("orders", "Müşteri girişi")}</div>` : "";
   byId("order-history").hidden = !account;
   byId("my-orders").innerHTML = state.customerOrders.filter(order => !closedStatuses.includes(order.status))
     .map(order => orderCard(order, false)).join("") || '<p class="muted">Aktif siparişin yok.</p>';
@@ -345,9 +375,9 @@ function getDeviceLocation() {
       ({coords}) => resolve({lat:coords.latitude, lng:coords.longitude}),
       error => reject(new Error(error.code === 1
         ? "Konum izni verilmedi. Tarayıcı ve cihaz ayarlarında konuma izin ver veya ilçe ve mahalleyle ara."
-        : error.code === 3 ? "Konum isteği zaman aşımına uğradı. Tekrar dene veya ilçe ve mahalleyle ara."
+        : error.code === 3 ? "Cihaz konumu zamanında alınamadı. Bölge seç menüsüyle devam edebilirsin."
         : "Cihaz konumu alınamadı. Konum servislerini kontrol et veya ilçe ve mahalleyle ara.")),
-      {timeout:10000, maximumAge:30000},
+      {timeout:20000, maximumAge:600000, enableHighAccuracy:false},
     );
   });
 }
@@ -383,6 +413,15 @@ async function preparePhoto(file) {
 byId("categories").innerHTML = categories.map(label => `<option>${label}</option>`).join("");
 byId("search").addEventListener("input", renderCatalog);
 byId("area-search").addEventListener("input", renderCatalog);
+byId("area-options").addEventListener("change", event => {
+  byId("area-search").value = event.currentTarget.value;
+  if (nearbyPoint) setNearby(null, initialLocationText);
+  else renderCatalog();
+});
+byId("catalog-toggle").addEventListener("click", () => {
+  examplesSelected = !examplesSelected;
+  renderCatalog();
+});
 byId("radius").addEventListener("change", renderCatalog);
 const initialLocationText = "İlçe veya mahalle yaz ya da mesafe hesabı için konum seç.";
 function setNearby(point, message) {
@@ -462,7 +501,7 @@ byId("set-product-location").addEventListener("click", async event => {
     if (session === editorSession) {
       button.disabled = false;
       byId("clear-product-location").disabled = false;
-        }
+    }
   }
 });
 byId("clear-product-location").addEventListener("click", () => {
@@ -485,7 +524,7 @@ function openAccount() {
   byId("account-note").textContent = account?.name ?? "Sipariş vermek veya mutfağını açmak için giriş yap.";
   byId("account-options").innerHTML = account
     ? '<button class="account-option" data-view="orders">Siparişlerim</button><button class="account-option" data-view="seller">Üretici paneli</button><a class="account-option" href="/signout-with-chatgpt?return_to=%2F" target="_top">Oturumu kapat</a>'
-    : signIn;
+    : signIn("orders", "Müşteri girişi") + signIn("seller", "Üretici girişi");
   byId("account-dialog").showModal();
 }
 
@@ -495,12 +534,13 @@ function renderHandoff() {
   byId("delivery-address").required = delivery;
 }
 
-byId("cart-button").addEventListener("click", () => {
+function openCart() {
   if (!byId("customer-name").value) byId("customer-name").value = state.account?.name ?? "";
   renderHandoff();
   renderCart();
-  byId("cart-dialog").showModal();
-});
+  if (!byId("cart-dialog").open) byId("cart-dialog").showModal();
+}
+byId("cart-button").addEventListener("click", openCart);
 byId("account-button").addEventListener("click", openAccount);
 byId("delivery-date").addEventListener("change", refreshSchedule);
 byId("handoff").addEventListener("change", renderHandoff);
@@ -633,4 +673,6 @@ setInterval(() => {
   if (!document.hidden && currentView !== "shop" && !document.querySelector("dialog[open]")) void syncShop();
 }, 30000);
 render();
-void syncShop();
+const requestedView = new URLSearchParams(window.location.search).get("view");
+if (["orders", "seller"].includes(requestedView)) showView(requestedView);
+else void syncShop();
