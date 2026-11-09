@@ -3,7 +3,28 @@
 const byId = id => document.getElementById(id);
 const categories = ["Ana yemek", "Hamur işi", "Tatlı", "Meze"];
 const icon = {"Ana yemek":"🍲","Hamur işi":"🥟","Tatlı":"🍰","Meze":"🫒"};
-const statuses = ["Yeni", "Hazırlanıyor", "Teslime hazır", "Tamamlandı", "İptal"];
+const accounts = [
+  {id:"deniz", name:"Deniz", role:"customer"},
+  {id:"ayse", name:"Ayşe'nin Mutfağı", role:"seller"},
+  {id:"zeynep", name:"Zeynep'in Fırını", role:"seller"},
+  {id:"fatma", name:"Fatma'nın Tatlıları", role:"seller"},
+];
+const customerAccount = accounts[0];
+const sellerId = maker => accounts.find(account => account.role === "seller" && account.name === maker)?.id ?? "ayse";
+const ownerOf = item => item.sellerId ?? sellerId(item.maker);
+const buyerOf = order => order.customerId ?? customerAccount.id;
+const slots = ["10:00", "12:00", "14:00", "16:00", "18:00", "20:00"];
+const slotLabel = slot => `${slot}–${String(Number(slot.slice(0, 2)) + 2).padStart(2, "0")}:00`;
+const orderActions = {
+  "Onay bekliyor": [
+    {next:"Onaylandı", label:"Onayla", kind:"button"},
+    {next:"Reddedildi", label:"Reddet", kind:"pill reject"},
+  ],
+  "Onaylandı": [{next:"Hazırlanıyor", label:"Hazırlamaya başla", kind:"button"}],
+  "Hazırlanıyor": [{next:"Teslime hazır", label:"Teslime hazır", kind:"button"}],
+  "Teslime hazır": [{next:"Tamamlandı", label:"Teslim edildi ve nakit alındı", kind:"button"}],
+};
+const scheduleDate = new Intl.DateTimeFormat("tr-TR", {dateStyle:"long", timeZone:"UTC"});
 const demoAreas = [
   {district:"Kadıköy", neighborhood:"Moda", point:{lat:40.9811, lng:29.0267}},
   {district:"Üsküdar", neighborhood:"Kuzguncuk", point:{lat:41.0372, lng:29.0304}},
@@ -41,6 +62,16 @@ function load() {
   return defaults();
 }
 let state = load();
+const sessionKey = "komsu-sofrasi-account";
+function readAccount() {
+  try {
+    return accounts.find(account => account.id === sessionStorage.getItem(sessionKey)) ?? null;
+  } catch {
+    return null;
+  }
+}
+let activeAccount = readAccount();
+let returnToCart = false;
 let category = "";
 let nearbyPoint = null;
 let productPoint = null;
@@ -130,31 +161,99 @@ function renderCatalog() {
   }).join("");
 }
 
+function turkeyNow() {
+  const parts = new Intl.DateTimeFormat("sv-SE", {
+    timeZone:"Europe/Istanbul", year:"numeric", month:"2-digit", day:"2-digit",
+    hour:"2-digit", minute:"2-digit", hourCycle:"h23",
+  }).formatToParts();
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return {date:`${values.year}-${values.month}-${values.day}`, time:`${values.hour}:${values.minute}`};
+}
+
+function lastDeliveryDate(today) {
+  const date = new Date(today + "T00:00:00Z");
+  date.setUTCDate(date.getUTCDate() + 30);
+  return date.toISOString().slice(0, 10);
+}
+
+function availableSlots(date, now) {
+  if (date < now.date || date > lastDeliveryDate(now.date)) return [];
+  return slots.filter(slot => date !== now.date || slot > now.time);
+}
+
+function refreshSchedule() {
+  const date = byId("delivery-date");
+  const slot = byId("delivery-slot");
+  const now = turkeyNow();
+  date.min = now.date;
+  date.max = lastDeliveryDate(now.date);
+  if (!date.value || date.value < date.min) {
+    const tomorrow = new Date(now.date + "T00:00:00Z");
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    date.value = availableSlots(now.date, now).length ? now.date : tomorrow.toISOString().slice(0, 10);
+  }
+  const previous = slot.value;
+  const available = availableSlots(date.value, now);
+  slot.innerHTML = available.map(time => `<option value="${time}">${slotLabel(time)}</option>`).join("") ||
+    '<option value="">Başka bir tarih seç</option>';
+  if (available.includes(previous)) slot.value = previous;
+  byId("place-order").disabled = !available.length || cartEntries().some(({product, qty}) => qty > product.stock);
+}
+
 function renderCart() {
   const entries = cartEntries();
   byId("count").textContent = entries.reduce((total, item) => total + item.qty, 0);
-  byId("checkout").hidden = !entries.length;
-  byId("checkout").querySelector("button").disabled = entries.some(({product, qty}) => qty > product.stock);
+  const isCustomer = activeAccount?.role === "customer";
+  byId("checkout").hidden = !entries.length || !isCustomer;
+  byId("cart-signin").hidden = !entries.length || isCustomer;
+  if (entries.length && isCustomer) refreshSchedule();
   byId("cart-lines").innerHTML = !entries.length ? '<p class="muted">Sepetin boş. Keşfet ekranından ürün ekleyebilirsin.</p>' : entries.map(({product:p, qty}) =>
     `<div class="inventory-row"><div><b>${escape(p.name)}</b><br><small>${money(unitPrice(p) * qty)}${qty > p.stock ? " · Stok azaldı, adedi düşür" : ""}</small></div>
       <div class="qty"><button data-minus="${p.id}" aria-label="Bir adet çıkar">−</button><span>${qty}</span><button data-add="${p.id}" aria-label="Bir adet ekle" ${qty >= p.stock ? "disabled" : ""}>+</button></div></div>`).join("") +
     `<p><strong>Toplam ${money(orderTotal(entries))}</strong></p>`;
 }
 
+function orderStatus(order) {
+  return order.status === "Yeni" ? "Onay bekliyor" : order.status;
+}
+
 function orderCard(order, seller) {
-  return `<article class="order"><div class="order-top"><b>${escape(seller ? order.customer : order.maker)} · #${escape(order.id.slice(0, 8))}</b><span class="pill">${escape(order.status)}</span></div>
+  const status = orderStatus(order);
+  const negative = ["Reddedildi", "İptal"].includes(status);
+  const badge = negative ? "status-negative" : status === "Onay bekliyor" ? "status-pending" : "";
+  const scheduled = order.deliveryDate && order.deliverySlot
+    ? `${scheduleDate.format(new Date(order.deliveryDate + "T00:00:00Z"))} · ${slotLabel(order.deliverySlot)}`
+    : "Teslim zamanı belirtilmemiş";
+  const payment = order.paymentMethod
+    ? negative ? "Tahsilat yok" : status === "Tamamlandı" ? "Nakit ödeme alındı" : "Teslimde nakit ödeme"
+    : "Ödeme bilgisi belirtilmemiş";
+  const actions = seller
+    ? orderActions[status] ?? []
+    : status === "Onay bekliyor" ? [{next:"İptal",label:"Talebi iptal et",kind:"pill reject"}] : [];
+  return `<article class="order">
+    <div class="order-top"><b>${escape(seller ? order.customer : order.maker)} · #${escape(order.id.slice(0, 8))}</b><span class="pill ${badge}">${escape(status)}</span></div>
     <p>${order.items.map(item => `${item.qty} × ${escape(item.name)}`).join(", ")}</p>
-    <p class="muted">${escape(order.handoff)} · ${money(order.total)}${seller ? " · " + escape(order.maker) : ""}</p>
-    ${seller ? `<label class="muted">Durum <select data-order="${order.id}" ${["Tamamlandı","İptal"].includes(order.status) ? "disabled" : ""}>
-    ${statuses.map(status => `<option ${status === order.status ? "selected" : ""}>${status}</option>`).join("")}</select></label>` : ""}</article>`;
+    <p class="order-time">${escape(scheduled)}</p>
+    <p class="muted">${escape(order.handoff)} · ${money(order.total)} · ${payment}</p>
+    ${actions.length ? `<div class="order-actions">${actions.map(({next,label,kind}) => `<button class="${kind}" data-order="${escape(order.id)}" data-next="${next}">${next === "Tamamlandı" && !order.paymentMethod ? "Teslim edildi" : label}</button>`).join("")}</div>` : ""}
+  </article>`;
 }
 
 function render() {
   renderCatalog();
   renderCart();
-  byId("inventory").innerHTML = state.products.map(p => `<div class="inventory-row"><div><b>${escape(p.name)}</b><br><small>${escape(p.maker)} · ${p.stock} adet · ${money(unitPrice(p))}</small></div><button class="pill" data-edit="${p.id}">Düzenle</button></div>`).join("");
-  byId("seller-orders").innerHTML = state.orders.map(o => orderCard(o, true)).join("") || '<p class="muted">Henüz sipariş yok.</p>';
-  byId("my-orders").innerHTML = state.orders.map(o => orderCard(o, false)).join("") || '<p class="muted">Verdiğin siparişler burada görünecek.</p>';
+  byId("account-button").textContent = activeAccount ? "Hesap değiştir" : "Giriş yap";
+  const seller = activeAccount?.role === "seller" ? activeAccount : null;
+  byId("seller-name").textContent = seller?.name ?? "";
+  byId("inventory").innerHTML = seller ? state.products.filter(p => ownerOf(p) === seller.id).map(p =>
+    `<div class="inventory-row"><div><b>${escape(p.name)}</b><br><small>${escape(p.maker)} · ${p.stock} adet · ${money(unitPrice(p))}</small></div><button class="pill" data-edit="${p.id}">Düzenle</button></div>`).join("") : "";
+  byId("seller-orders").innerHTML = (seller ? state.orders.filter(o => ownerOf(o) === seller.id).map(o => orderCard(o, true)).join("") : "") ||
+    '<p class="muted">Henüz sipariş yok.</p>';
+  const customer = activeAccount?.role === "customer" ? activeAccount : null;
+  byId("my-orders").innerHTML = customer
+    ? state.orders.filter(o => buyerOf(o) === customer.id).map(o => orderCard(o, false)).join("") ||
+      '<p class="muted">Verdiğin siparişler burada görünecek.</p>'
+    : '<p class="muted">Siparişlerini görmek için müşteri girişi yap.</p><button class="pill" data-login="customer">Müşteri girişi</button>';
 }
 
 function changeQuantity(id, delta) {
@@ -187,6 +286,7 @@ function openProduct(product) {
   editorSession++;
   form.reset();
   form.elements.id.value = "";
+  form.elements.maker.value = activeAccount.name;
   if (product) for (const field of ["id", "name", "maker", "category", "price", "stock", "details", "district", "neighborhood"]) {
     form.elements[field].value = product[field] ?? "";
   }
@@ -326,19 +426,65 @@ byId("clear-product-location").addEventListener("click", () => {
   productPoint = null;
   renderProductPoint();
 });
-byId("cart-button").addEventListener("click", () => byId("cart-dialog").showModal());
-byId("new-product").addEventListener("click", () => openProduct());
+function showView(view) {
+  for (const section of ["shop", "seller"]) byId(section).hidden = section !== view;
+  for (const tab of document.querySelectorAll("nav [data-view]")) {
+    if (tab.dataset.view === view) tab.setAttribute("aria-current", "page");
+    else tab.removeAttribute("aria-current");
+  }
+  window.scrollTo(0, 0);
+}
+
+function openAccount(role, resumeCart = false) {
+  returnToCart = resumeCart;
+  const available = accounts.filter(account => !role || account.role === role);
+  byId("account-title").textContent = role === "seller" ? "Üretici girişi" : role === "customer" ? "Müşteri girişi" : "Demo girişi";
+  byId("account-note").textContent = activeAccount
+    ? `Şu an ${activeAccount.name} hesabındasın. Geçmek istediğin demo hesabını seç.`
+    : "Denemek istediğin hesabı seç.";
+  byId("account-options").innerHTML = available.map(account =>
+    `<button class="account-option" data-account="${account.id}">${escape(account.name)} <small>${account.role === "seller" ? "Üretici" : "Müşteri"}</small></button>`).join("");
+  byId("sign-out").hidden = !activeAccount;
+  byId("account-dialog").showModal();
+}
+
+function setAccount(account) {
+  activeAccount = account;
+  try {
+    if (account) sessionStorage.setItem(sessionKey, account.id);
+    else sessionStorage.removeItem(sessionKey);
+  } catch {}
+  byId("account-dialog").close();
+  showView(account?.role === "seller" ? "seller" : "shop");
+  render();
+  if (returnToCart && account?.role === "customer") byId("cart-dialog").showModal();
+  returnToCart = false;
+}
+
+byId("cart-button").addEventListener("click", () => {
+  renderCart();
+  byId("cart-dialog").showModal();
+});
+byId("account-button").addEventListener("click", () => openAccount());
+byId("sign-out").addEventListener("click", () => setAccount(null));
+byId("checkout-login").addEventListener("click", () => {
+  byId("cart-dialog").close();
+  openAccount("customer", true);
+});
+byId("delivery-date").addEventListener("change", refreshSchedule);
+byId("new-product").addEventListener("click", () => {
+  if (activeAccount?.role === "seller") openProduct();
+});
 document.addEventListener("click", event => {
   const button = event.target.closest("button");
   if (!button) return;
   const data = button.dataset;
-  if (data.view) {
-    for (const view of ["shop", "seller"]) byId(view).hidden = view !== data.view;
-    for (const tab of document.querySelectorAll("nav [data-view]")) {
-      if (tab.dataset.view === data.view) tab.setAttribute("aria-current", "page");
-      else tab.removeAttribute("aria-current");
-    }
-    window.scrollTo(0, 0);
+  if (data.view === "seller" && activeAccount?.role !== "seller") openAccount("seller");
+  else if (data.view) showView(data.view);
+  if (data.login) openAccount(data.login);
+  if (data.account) {
+    const account = accounts.find(item => item.id === data.account);
+    if (account) setAccount(account);
   }
   if ("category" in data) {
     category = data.category;
@@ -347,12 +493,17 @@ document.addEventListener("click", event => {
   }
   if (data.add) changeQuantity(data.add, 1);
   if (data.minus) changeQuantity(data.minus, -1);
-  if (data.edit) openProduct(findProduct(data.edit));
+  if (data.edit && activeAccount?.role === "seller") {
+    const product = findProduct(data.edit);
+    if (product && ownerOf(product) === activeAccount.id) openProduct(product);
+  }
+  if (data.order) changeOrder(data.order, data.next);
   if ("close" in data) button.closest("dialog").close();
 });
 
 byId("product-form").addEventListener("submit", event => {
   event.preventDefault();
+  if (activeAccount?.role !== "seller") return;
   const fields = Object.fromEntries(new FormData(event.currentTarget));
   if (byId("save-product").disabled || byId("set-product-location").disabled) return;
   const name = fields.name.trim();
@@ -361,7 +512,8 @@ byId("product-form").addEventListener("submit", event => {
   if (!name || !maker || !details) return notify("Ürün adı, üretici ve açıklama alanlarını doldur.");
   const next = structuredClone(state);
   const existing = next.products.find(p => p.id === fields.id);
-  const product = {id: existing?.id ?? uid(), name, maker, details, category: fields.category,
+  if (existing && ownerOf(existing) !== activeAccount.id) return;
+  const product = {id: existing?.id ?? uid(), sellerId:activeAccount.id, name, maker, details, category: fields.category,
     district: (fields.district ?? "").trim(), neighborhood: (fields.neighborhood ?? "").trim(),
     point: productPoint, photo: productPhoto, price: Number(fields.price), stock: Number(fields.stock), visual: existing?.category === fields.category ? existing.visual : icon[fields.category]};
   if (existing) Object.assign(existing, product);
@@ -372,43 +524,56 @@ byId("product-form").addEventListener("submit", event => {
 byId("checkout").addEventListener("submit", event => {
   event.preventDefault();
   const form = event.currentTarget;
-  const customer = form.elements.customer.value.trim();
+  if (activeAccount?.role !== "customer") return notify("Müşteri girişi yap.");
+  const date = form.elements.date.value;
+  const slot = form.elements.slot.value;
+  if (!availableSlots(date, turkeyNow()).includes(slot)) {
+    refreshSchedule();
+    return notify("Geçerli bir teslim tarihi ve saat aralığı seç.");
+  }
   const entries = cartEntries();
-  if (!customer) return notify("Adını gir.");
   if (!entries.length || entries.some(({product, qty}) => qty > product.stock)) return notify("Sepetindeki adetleri kontrol et.");
   const next = structuredClone(state);
   const byMaker = new Map();
   for (const {product, qty} of entries) {
-    if (!byMaker.has(product.maker)) byMaker.set(product.maker, []);
-    byMaker.get(product.maker).push({product, qty});
+    const group = JSON.stringify([ownerOf(product), product.maker]);
+    if (!byMaker.has(group)) byMaker.set(group, []);
+    byMaker.get(group).push({product, qty});
     next.products.find(p => p.id === product.id).stock -= qty;
   }
-  for (const [maker, items] of byMaker) {
-    next.orders.unshift({id: uid(), maker, customer, handoff: form.elements.handoff.value,
-      status:"Yeni", total:orderTotal(items), items:items.map(({product, qty}) => ({id:product.id, name:product.name, qty}))});
+  for (const items of byMaker.values()) {
+    const {product} = items[0];
+    next.orders.unshift({id: uid(), maker:product.maker, sellerId:ownerOf(product),
+      customer:activeAccount.name, customerId:activeAccount.id, handoff:form.elements.handoff.value,
+      deliveryDate:date, deliverySlot:slot, paymentMethod:"cash-on-delivery", status:"Onay bekliyor",
+      total:orderTotal(items), items:items.map(({product, qty}) => ({id:product.id, name:product.name, qty}))});
   }
   next.cart = {};
-  if (update(next, "Sipariş oluşturuldu. Siparişlerim bölümünden takip edebilirsin.")) {
+  if (update(next, "Sipariş üreticinin onayına gönderildi.")) {
     form.reset();
     byId("cart-dialog").close();
   }
 });
 
-byId("seller-orders").addEventListener("change", event => {
-  const select = event.target.closest("select[data-order]");
-  if (!select || !statuses.includes(select.value)) return;
+function changeOrder(id, nextStatus) {
+  if (!activeAccount) return;
   const next = structuredClone(state);
-  const order = next.orders.find(o => o.id === select.dataset.order);
-  if (!order || ["İptal","Tamamlandı"].includes(order.status)) return;
-  order.status = select.value;
-  if (order.status === "İptal") {
+  const order = next.orders.find(o => o.id === id);
+  if (!order) return;
+  const status = orderStatus(order);
+  const allowed = activeAccount.role === "seller"
+    ? ownerOf(order) === activeAccount.id && orderActions[status]?.some(action => action.next === nextStatus)
+    : buyerOf(order) === activeAccount.id && status === "Onay bekliyor" && nextStatus === "İptal";
+  if (!allowed) return;
+  order.status = nextStatus;
+  if (["Reddedildi", "İptal"].includes(nextStatus)) {
     for (const item of order.items) {
       const p = next.products.find(product => product.id === item.id);
       if (p) p.stock += item.qty;
     }
   }
-  if (!update(next, "Sipariş durumu güncellendi")) render();
-});
+  update(next, "Sipariş durumu güncellendi");
+}
 
 window.addEventListener("storage", event => {
   if (event.key === key || event.key === null) {
@@ -416,4 +581,5 @@ window.addEventListener("storage", event => {
     render();
   }
 });
+if (activeAccount?.role === "seller") showView("seller");
 render();

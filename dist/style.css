@@ -103,3 +103,16 @@ form input,select,textarea{width:100%;min-width:0;border:1px solid #aeb5a8;backg
 .location-actions button,.photo-row button{white-space:normal}
 .photo-row img{width:105px;height:70px;object-fit:cover;border-radius:9px}
 @media(max-width:610px){.location-controls{gap:6px}.location-controls input{width:155px}.food-visual{height:115px}}
+
+.account-options{display:grid;gap:8px;margin:14px 0}
+.account-option{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;background:var(--sage);color:var(--green);border-radius:11px;padding:12px 14px;font-weight:700}
+.account-option:hover{background:#d4e2c8}
+.account-option small{font-weight:600}
+.payment-box{border:1px solid var(--line);background:#f4f3e9;border-radius:11px;padding:9px 12px}
+.order-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px}
+.order-actions .button,.order-actions .pill{padding:7px 11px;font-size:13px}
+.order-actions .reject{color:#812f20;background:#f6e3da}
+.order .order-time{font-weight:650;color:var(--green)}
+.order .status-pending{background:#f2e5cc;color:#664721}
+.order .status-negative{background:#f6e3da;color:#812f20}
+@media(max-width:480px){.bar{flex-wrap:wrap;padding:9px 0;gap:4px}.bar nav{flex-wrap:wrap}.order-top{align-items:start;flex-wrap:wrap}}

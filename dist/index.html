@@ -11,7 +11,7 @@
 <body>
 <header><div class="bar wrap">
 <button class="brand" data-view="shop"><span class="logo" aria-hidden="true">♨</span><span>Komşu Sofrası<small>EVDEN SOFRANA</small></span></button>
-<nav aria-label="Ana menü"><button data-view="shop" aria-current="page">Keşfet</button><button data-view="seller">Üretici paneli</button><button class="dark" id="cart-button">Sepet <span id="count">0</span></button></nav>
+<nav aria-label="Ana menü"><button data-view="shop" aria-current="page">Keşfet</button><button data-view="seller">Üretici paneli</button><button id="account-button">Giriş yap</button><button class="dark" id="cart-button">Sepet <span id="count">0</span></button></nav>
 </div></header>
 <main id="main" class="wrap">
 <section id="shop">
@@ -34,19 +34,28 @@
 <section class="customer-orders" aria-labelledby="my-title"><h2 id="my-title">Siparişlerim</h2><div id="my-orders"></div></section>
 </section>
 <section id="seller" hidden>
-<div class="seller-intro"><span class="eyebrow">ÜRETİCİ PANELİ · DEMO</span><h1>Mutfağını yönet.</h1><p>Menüne ürün ekle, stok bilgilerini düzenle ve siparişleri takip et.</p><button class="button" id="new-product">+ Ürün ekle</button></div>
+<div class="seller-intro"><span class="eyebrow">ÜRETİCİ PANELİ · DEMO</span><h1>Mutfağını yönet.</h1><p><strong id="seller-name"></strong> · Siparişleri onayla, menünü ve stoklarını yönet.</p><button class="button" id="new-product">+ Ürün ekle</button></div>
 <div class="seller-grid"><section class="panel"><h2>Gelen siparişler</h2><div id="seller-orders"></div></section><section class="panel"><h2>Menüm</h2><div id="inventory"></div></section></div>
 </section>
 </main>
-<footer class="wrap"><b>Komşu Sofrası</b><span>Demo · Ürün ve siparişler bu tarayıcıda saklanır.</span></footer>
+<footer class="wrap"><b>Komşu Sofrası</b><span>Demo · Hesaplar örnektir. Ürün ve siparişler bu tarayıcıda saklanır.</span></footer>
 <dialog id="cart-dialog" aria-labelledby="cart-title">
 <div class="dialog-heading"><h2 id="cart-title">Sepetim</h2><button class="close" aria-label="Kapat" data-close>×</button></div>
 <div id="cart-lines"></div>
-<form id="checkout">
-<label>Adın<input name="customer" maxlength="70" required autocomplete="off" placeholder="Örn. Deniz"></label>
-<label>Teslim alma<select name="handoff"><option>Elden teslim</option><option>Teslimat talebi</option></select></label>
-<button class="button wide">Demo siparişi oluştur</button>
+<div id="cart-signin" hidden><p class="muted">Sipariş vermek için müşteri hesabını seç.</p><button class="button wide" id="checkout-login">Müşteri girişi</button></div>
+<form id="checkout" hidden>
+<label>Teslim şekli<select name="handoff"><option>Elden teslim</option><option>Teslimat talebi</option></select></label>
+<div class="fields"><label>Teslim tarihi<input id="delivery-date" name="date" type="date" required></label><label>Saat aralığı<select name="slot" id="delivery-slot" required></select></label></div>
+<p class="muted form-note">Teslim saati Türkiye saatidir. Üretici seçtiğin zamanı onaylar.</p>
+<div class="payment-box"><b>Teslimde nakit ödeme</b><p class="muted form-note">Sipariş onaylanırsa tutarı teslim sırasında üreticiye ödersin.</p></div>
+<button class="button wide" id="place-order">Onaya gönder</button>
 </form>
+</dialog>
+<dialog id="account-dialog" aria-labelledby="account-title">
+<div class="dialog-heading"><h2 id="account-title">Demo girişi</h2><button class="close" aria-label="Kapat" data-close>×</button></div>
+<p class="muted" id="account-note">Müşteri veya üretici hesabı seç.</p>
+<div id="account-options" class="account-options"></div>
+<button type="button" class="pill" id="sign-out" hidden>Oturumu kapat</button>
 </dialog>
 <dialog id="product-dialog" aria-labelledby="product-title">
 <div class="dialog-heading"><h2 id="product-title">Ürün ekle</h2><button class="close" aria-label="Kapat" data-close>×</button></div>

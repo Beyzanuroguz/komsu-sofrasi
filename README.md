@@ -6,12 +6,12 @@ Ev yapımı yemek, tatlı ve hamur işleri için Türkçe sipariş prototipi.
 
 `dist/index.html` dosyasını tarayıcıda aç veya proje kökünden `python3 -m http.server 8080 --directory dist` komutunu çalıştırıp `http://localhost:8080` adresine git.
 
-1. **Keşfet** ekranından sepetine bir ürün ekle ve örnek bir adla demo sipariş oluştur.
-2. **Üretici paneli** ekranında siparişi bul ve durumunu değiştir. Aynı ekrandan ürün ekleyebilir veya stok ve fiyat düzenleyebilirsin.
-3. **Keşfet → Siparişlerim** bölümünde güncellenen durumu kontrol et.
+1. **Giriş yap** menüsünden **Deniz** müşteri hesabını seç.
+2. **Keşfet** ekranından sepete bir ürün ekle. Teslim tarihini ve saat aralığını seçip **Onaya gönder**. Saatler Türkiye saatidir. Bu demo teslimde nakit ödemeyi kullanır.
+3. **Hesap değiştir** menüsünden ürünün üreticisini seç. Üretici panelinde **Onayla** veya **Reddet** seçeneğini kullan. Onaylanan siparişleri hazırlık ve teslim adımlarıyla ilerletebilirsin. Ret ve onay öncesi müşteri iptali ayrılan stoğu geri ekler.
+4. **Deniz** hesabına dönüp **Siparişlerim** bölümünde sonucu gör.
 
-Örnek ürünler, sepet ve siparişler tarayıcının yerel depolamasında saklanır. Müşteri ve üretici ekranı aynı tarayıcıdaki ortak demo verisini kullanır. Gerçek kullanıcı hesapları, ortak veritabanı, ödeme, mesaj bildirimleri ve teslimat entegrasyonu sonraki sürümün kapsamıdır.
-
+Hesaplar bu tarayıcıdaki örnek profillerdir. Örnek ürünler, fotoğraflar, sepet ve siparişler yerel depolamada saklanır. Ödeme durumu demo kaydıdır. Gerçek kullanıcı hesapları, ortak veritabanı, çevrimiçi tahsilat ve teslimat entegrasyonu sonraki sürümün kapsamıdır.
 
 ## Fotoğraf ve konum
 
