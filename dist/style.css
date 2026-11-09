@@ -1,0 +1,88 @@
+:root{color-scheme:light;--cream:#f9f6ee;--green:#234537;--ink:#24352e;--muted:#5d695d;--line:#dedfd3;--white:#fffdf8;--rust:#a24b33;--sage:#e5ead9}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--cream);color:var(--ink);font:16px/1.55 system-ui,-apple-system,sans-serif}
+button,input,select,textarea{font:inherit}
+button,.button{cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--rust);outline-offset:3px}
+.wrap{width:min(1190px,calc(100% - 64px));margin-inline:auto}
+header{background:var(--white);border-bottom:1px solid var(--line)}
+.bar,nav,.brand{display:flex;align-items:center}
+.bar{justify-content:space-between;gap:20px;min-height:76px}
+button{background:none;border:0;color:inherit}
+.brand{padding:0;text-align:left;gap:12px;color:var(--green);font:700 23px Georgia,serif;white-space:nowrap}
+.brand small{display:block;font:700 9px system-ui;letter-spacing:.22em;margin-top:3px}
+.logo{display:grid;place-items:center;width:43px;height:43px;border-radius:14px;background:var(--sage);font:26px system-ui}
+nav{gap:9px}
+nav button{padding:8px 12px;font-size:14px;font-weight:650;border-radius:30px}
+nav [aria-current]{background:var(--sage)}
+nav .dark,.button{display:inline-flex;align-items:center;justify-content:center;gap:9px;background:var(--green);color:white;border-radius:30px;font-weight:650}
+.dark span{background:#fff3;border-radius:100px;padding:0 7px}
+.hero{display:grid;grid-template-columns:1fr 1fr;margin:32px 0 58px;border-radius:28px;overflow:hidden;background:#eeeddf;min-height:410px}
+.hero-copy{padding:48px 48px 42px}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;font-size:11px;font-weight:800;letter-spacing:.15em;color:var(--rust)}
+.eyebrow i{background:var(--rust);width:7px;height:7px;border-radius:50%}
+h1,h2,h3{font-family:Georgia,serif;color:var(--green);margin:0;line-height:1.08}
+h1{font-size:clamp(42px,5.5vw,78px);letter-spacing:-.05em;margin:15px 0 17px}
+h1 em{color:var(--rust);font-weight:400}
+h2{font-size:clamp(26px,3.2vw,40px);letter-spacing:-.03em}
+h3{font-size:22px}
+.hero p,.seller-intro p{max-width:43ch;margin:0 0 25px;color:var(--muted)}
+.button{padding:11px 19px;text-decoration:none}
+.button:hover,.dark:hover{background:#34634e}
+.hero-photo{position:relative;display:flex;align-items:end;justify-content:end;padding:22px;background:#a8694f url(hero.jpg) center/cover}
+.hero-photo span{background:var(--white);color:var(--green);font:italic 16px Georgia;padding:10px 15px;border-radius:30px}
+.section-title{display:flex;align-items:end;justify-content:space-between;gap:16px}
+.section-title h2{margin-top:8px}
+.search{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:24px;background:var(--white);padding:8px 14px}
+.search span{font-size:22px;line-height:1}
+.search input{border:0;background:none;min-width:0;width:200px;color:var(--ink)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+.filters button{border:1px solid var(--line);padding:7px 14px;background:var(--white);border-radius:30px;font-size:14px}
+.filters [aria-pressed=true]{color:white;background:var(--green);border-color:var(--green)}
+.muted{color:var(--muted);font-size:14px}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.card,.panel,.order{background:var(--white);border:1px solid var(--line);border-radius:18px}
+.card{overflow:hidden;display:flex;flex-direction:column}
+.food-visual{min-height:136px;display:grid;place-items:center;background:var(--sage);font-size:56px}
+.food-visual[data-kind="Tatlı"]{background:#f4dfce}
+.food-visual[data-kind="Hamur işi"]{background:#f2e5cc}
+.food-visual[data-kind="Meze"]{background:#e8ecda}
+.card-body{padding:17px;display:flex;flex-direction:column;flex:1}
+.card-body h3{margin-top:6px}
+.card-body p{margin:8px 0;color:var(--muted);overflow-wrap:anywhere}
+.card h3,.inventory-row b{overflow-wrap:anywhere}
+.card-bottom,.inventory-row,.order-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.card-bottom{margin-top:auto;padding-top:10px}
+.card-bottom strong{color:var(--green);font-size:18px}
+.pill{background:var(--sage);border-radius:20px;padding:5px 10px;font-size:13px;font-weight:700;white-space:nowrap}
+button.pill:hover{background:#d4e2c8}
+button:disabled{opacity:.55;cursor:default}
+.customer-orders,.seller-grid{margin:38px 0 50px}
+.customer-orders h2,.panel h2{margin-bottom:16px}
+.seller-intro{padding:36px;background:#eeeddf;border-radius:28px;margin-top:32px}
+.seller-grid{display:grid;grid-template-columns:1.15fr 1fr;gap:18px}
+.panel{padding:20px;min-width:0}
+.panel h2{font-size:30px}
+.inventory-row{border-top:1px solid var(--line);padding:12px 0}
+.order{padding:13px;margin:10px 0;overflow-wrap:anywhere}
+.order p{margin:4px 0}
+.order select{width:auto;max-width:100%;margin-top:8px}
+footer{border-top:1px solid var(--line);display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap;padding:19px 0 24px;color:var(--muted);font-size:13px}
+footer b{color:var(--green)}
+dialog{width:min(540px,calc(100% - 30px));max-height:90dvh;background:var(--white);color:var(--ink);border:1px solid var(--line);border-radius:22px;padding:23px}
+dialog::backdrop{background:#172a22a8}
+.dialog-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.close{font-size:24px;border-radius:50%;background:var(--sage);width:36px;height:36px;line-height:1}
+form{display:grid;gap:12px}
+form label{display:grid;gap:4px;font-size:14px;font-weight:650;min-width:0}
+form input,select,textarea{width:100%;min-width:0;border:1px solid #aeb5a8;background:#fff;color:var(--ink);border-radius:9px;padding:7px 9px}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.wide{width:100%;margin-top:4px}
+.qty{display:flex;align-items:center;gap:8px}
+.qty button{width:33px;height:33px;border-radius:50%;background:var(--sage);font-weight:750}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);max-width:calc(100% - 24px);width:max-content;background:var(--green);color:white;border-radius:13px;padding:10px 16px;box-shadow:0 6px 20px #0002}
+#toast:empty{display:none}
+@media(max-width:820px){.hero-copy{padding:33px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:610px){.wrap{width:calc(100% - 28px)}.bar{min-height:70px;gap:9px}.logo{display:none}.brand{font-size:17px}.brand small{display:none}nav{gap:2px}nav button{font-size:12px;padding:7px}.hero{grid-template-columns:1fr;margin:18px 0 32px}.hero-copy{padding:26px}.hero-photo{min-height:200px}.section-title{align-items:stretch;flex-direction:column}.search input{width:100%}.seller-grid{grid-template-columns:1fr}.cards{gap:10px}.card-body{padding:11px}.card h3{font-size:19px}.card-bottom{flex-wrap:wrap}.food-visual{min-height:105px}}
