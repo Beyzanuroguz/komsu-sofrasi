@@ -4,6 +4,11 @@ const byId = id => document.getElementById(id);
 const categories = ["Ana yemek", "Hamur işi", "Tatlı", "Meze"];
 const icon = {"Ana yemek":"🍲","Hamur işi":"🥟","Tatlı":"🍰","Meze":"🫒"};
 const statuses = ["Yeni", "Hazırlanıyor", "Teslime hazır", "Tamamlandı", "İptal"];
+const demoAreas = [
+  {district:"Kadıköy", neighborhood:"Moda", point:{lat:40.9811, lng:29.0267}},
+  {district:"Üsküdar", neighborhood:"Kuzguncuk", point:{lat:41.0372, lng:29.0304}},
+  {district:"Beşiktaş", neighborhood:"Abbasağa", point:{lat:41.0471, lng:29.0046}},
+];
 const seeds = [
   ["Kayseri mantısı", "Ayşe'nin Mutfağı", "Ana yemek", 230, 12, "Yoğurt ve biber sosuyla, 1 porsiyon. Gluten ve süt içerir.", "🥣"],
   ["Ispanaklı kol böreği", "Zeynep'in Fırını", "Hamur işi", 180, 8, "El açması, 4 dilim. Gluten, süt ve yumurta içerir.", "🥟"],
@@ -12,19 +17,37 @@ const seeds = [
   ["Fırın sütlaç", "Fatma'nın Tatlıları", "Tatlı", 95, 16, "Üzeri kızarmış, 1 kâse. Süt içerir.", "🍮"],
   ["Ev usulü kuru fasulye", "Zeynep'in Fırını", "Ana yemek", 165, 8, "Pilavla servis edilir, 1 porsiyon.", "🍛"],
 ].map(([name, maker, category, price, stock, details, visual], index) =>
-  ({id: String(index + 1), name, maker, category, price, stock, details, visual}));
+  ({id: String(index + 1), name, maker, category, price, stock, details, visual,
+    ...demoAreas[index % 3]}));
 
 const key = "komsu-sofrasi-v1";
 const defaults = () => ({products: structuredClone(seeds), orders: [], cart: {}});
 function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(key));
-    if (Array.isArray(saved?.products) && Array.isArray(saved.orders) && saved.cart) return saved;
+    if (Array.isArray(saved?.products) && Array.isArray(saved.orders) && saved.cart) {
+      for (const product of saved.products) {
+        if ("district" in product) continue;
+        const seed = seeds.find(item => item.id === product.id);
+        if (seed) {
+          product.district = seed.district;
+          product.neighborhood = seed.neighborhood;
+          product.point = seed.point;
+        }
+      }
+      return saved;
+    }
   } catch {}
   return defaults();
 }
 let state = load();
 let category = "";
+let nearbyPoint = null;
+let productPoint = null;
+let productPhoto = "";
+let editorSession = 0;
+let photoRequest = 0;
+const photoPattern = /^data:image\/jpeg;base64,[a-zA-Z0-9+/]+=*$/;
 let toastTimeout;
 const formatMoney = new Intl.NumberFormat("tr-TR", {style: "currency", currency: "TRY"});
 const money = cents => formatMoney.format(cents / 100);
@@ -49,7 +72,7 @@ function update(next, message) {
   try {
     localStorage.setItem(key, JSON.stringify(next));
   } catch {
-    notify("Tarayıcı veriyi kaydedemedi. Depolama ayarlarını kontrol et.");
+    notify("Tarayıcı veriyi kaydedemedi. Depolama doluysa ürün fotoğrafını kaldırıp tekrar dene.");
     return false;
   }
   state = next;
@@ -58,21 +81,50 @@ function update(next, message) {
   return true;
 }
 
+function normalize(value) {
+  return value.trim().toLocaleLowerCase("tr-TR").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "").replaceAll("ı", "i");
+}
+
+function distanceKm(first, second) {
+  const radians = value => value * Math.PI / 180;
+  const lat = radians(second.lat - first.lat);
+  const lng = radians(second.lng - first.lng);
+  const a = Math.sin(lat / 2) ** 2 +
+    Math.cos(radians(first.lat)) * Math.cos(radians(second.lat)) * Math.sin(lng / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(Math.min(1, a)));
+}
+
 function renderCatalog() {
-  const query = byId("search").value.trim().toLocaleLowerCase("tr-TR");
-  const products = state.products.filter(p =>
-    (!category || p.category === category) &&
-    (p.name + " " + p.maker).toLocaleLowerCase("tr-TR").includes(query));
+  const query = normalize(byId("search").value);
+  const area = normalize(byId("area-search").value);
+  const radius = Number(byId("radius").value);
+  const products = state.products.filter(p => {
+    const location = normalize([p.district, p.neighborhood].filter(Boolean).join(" "));
+    return (!category || p.category === category) && location.includes(area) &&
+      normalize(p.name + " " + p.maker).includes(query);
+  }).map(p => ({...p, km: nearbyPoint && p.point ? distanceKm(nearbyPoint, p.point) : null}));
+  const matches = nearbyPoint
+    ? products.filter(p => p.km !== null && p.km <= radius).sort((a, b) => a.km - b.km)
+    : products;
   byId("filters").innerHTML = ["", ...categories].map(label =>
     `<button data-category="${escape(label)}" aria-pressed="${label === category}">${label || "Tümü"}</button>`).join("");
-  byId("results").textContent = products.length ? `${products.length} ürün` : "Aramana uygun ürün bulunamadı.";
-  byId("catalog").innerHTML = products.map(p => {
+  byId("results").textContent = matches.length ? `${matches.length} ürün` :
+    nearbyPoint ? "Bu mesafede ürün bulunamadı. Mesafeyi artırabilir veya konum filtresini kapatabilirsin." :
+    "Aramana uygun ürün bulunamadı.";
+  byId("catalog").innerHTML = matches.map(p => {
     const inCart = state.cart[p.id] || 0;
     const label = !p.stock ? "Tükendi" : inCart >= p.stock ? "Stok sınırı" : "+ Sepete ekle";
+    const place = [p.neighborhood, p.district].filter(Boolean).join(" · ");
+    const distance = p.km === null ? "" : p.km < 0.1 ? "100 m’den yakın" :
+      `${p.km.toLocaleString("tr-TR", {maximumFractionDigits:1})} km`;
+    const location = [place, distance].filter(Boolean).join(" · ");
+    const visual = photoPattern.test(p.photo || "") ? `<img src="${p.photo}" alt="" loading="lazy">` :
+      escape(p.visual || icon[p.category]);
     return `<article class="card">
-      <div class="food-visual" data-kind="${escape(p.category)}" aria-hidden="true">${escape(p.visual || icon[p.category])}</div>
+      <div class="food-visual" data-kind="${escape(p.category)}" aria-hidden="true">${visual}</div>
       <div class="card-body"><span class="eyebrow">${escape(p.category)}</span><h3>${escape(p.name)}</h3>
-      <span class="muted">${escape(p.maker)} · ${p.stock} adet</span><p>${escape(p.details)}</p>
+      <span class="muted">${escape(p.maker)} · ${p.stock} adet</span>${location ? `<span class="food-place">⌖ ${escape(location)}</span>` : ""}<p>${escape(p.details)}</p>
       <div class="card-bottom"><strong>${money(unitPrice(p))}</strong><button class="pill" data-add="${p.id}" aria-label="${escape(p.name + " · " + label)}" ${inCart >= p.stock ? "disabled" : ""}>${label}</button></div></div>
     </article>`;
   }).join("");
@@ -116,19 +168,164 @@ function changeQuantity(id, delta) {
   update(next, delta > 0 ? "Sepete eklendi" : "");
 }
 
+function renderProductPhoto() {
+  byId("photo-row").hidden = !productPhoto;
+  const preview = byId("photo-preview");
+  if (productPhoto) preview.src = productPhoto;
+  else preview.removeAttribute("src");
+}
+
+function renderProductPoint() {
+  byId("clear-product-location").hidden = !productPoint;
+  byId("product-location-status").textContent = productPoint
+    ? "Konum eklendi. Müşteriler teslim bölgesini ve yaklaşık mesafeyi görür."
+    : "Yakındaki aramalarda çıkmak için teslim noktasında konum ekleyebilirsin.";
+}
+
 function openProduct(product) {
   const form = byId("product-form");
+  editorSession++;
   form.reset();
   form.elements.id.value = "";
-  if (product) for (const field of ["id", "name", "maker", "category", "price", "stock", "details"]) {
-    form.elements[field].value = product[field];
+  if (product) for (const field of ["id", "name", "maker", "category", "price", "stock", "details", "district", "neighborhood"]) {
+    form.elements[field].value = product[field] ?? "";
   }
+  productPoint = product?.point ?? null;
+  productPhoto = photoPattern.test(product?.photo || "") ? product.photo : "";
+  byId("save-product").disabled = false;
+  byId("set-product-location").disabled = false;
+  byId("clear-product-location").disabled = false;
+  byId("photo-status").textContent = "JPG, PNG veya WebP · En fazla 12 MB";
+  renderProductPhoto();
+  renderProductPoint();
   byId("product-title").textContent = product ? "Ürünü düzenle" : "Ürün ekle";
   byId("product-dialog").showModal();
 }
 
+function getDeviceLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error("Tarayıcı konumu desteklemiyor. İlçe veya mahalle kullanabilirsin."));
+    navigator.geolocation.getCurrentPosition(
+      ({coords}) => resolve({lat:coords.latitude, lng:coords.longitude}),
+      error => reject(new Error(error.code === 1
+        ? "Konum izni kapalı. Tarayıcı ayarlarından izin verebilir veya ilçe ve mahalleyle arayabilirsin."
+        : "Konum alınamadı. Tekrar deneyebilir veya ilçe ve mahalle kullanabilirsin.")),
+      {timeout:10000, maximumAge:30000},
+    );
+  });
+}
+
+async function preparePhoto(file) {
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    throw new Error("JPG, PNG veya WebP dosyası seç.");
+  }
+  if (file.size > 12 * 1024 * 1024) throw new Error("12 MB’tan küçük bir fotoğraf seç.");
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const ratio = Math.min(1, 900 / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * ratio));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#fffdf8";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const photo = canvas.toDataURL("image/jpeg", .68);
+    if (!photoPattern.test(photo)) throw new Error();
+    return photo;
+  } catch {
+    throw new Error("Fotoğraf işlenemedi. Başka bir dosya seç.");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 byId("categories").innerHTML = categories.map(label => `<option>${label}</option>`).join("");
 byId("search").addEventListener("input", renderCatalog);
+byId("area-search").addEventListener("input", renderCatalog);
+byId("radius").addEventListener("change", renderCatalog);
+byId("nearby").addEventListener("click", async event => {
+  const button = event.currentTarget;
+  const status = byId("location-status");
+  if (nearbyPoint) {
+    nearbyPoint = null;
+    status.textContent = "İlçe veya mahalle yaz ya da cihaz konumunu kullan.";
+  } else {
+    button.disabled = true;
+    status.textContent = "Konum alınıyor…";
+    try {
+      nearbyPoint = await getDeviceLocation();
+      status.textContent = "Konumu olan ürünler en yakından uzağa sıralanıyor.";
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  }
+  button.setAttribute("aria-pressed", Boolean(nearbyPoint));
+  button.textContent = nearbyPoint ? "Konumu kapat" : "Konumumu kullan";
+  byId("radius-label").hidden = !nearbyPoint;
+  renderCatalog();
+});
+byId("product-photo").addEventListener("change", async event => {
+  const field = event.currentTarget;
+  const file = field.files[0];
+  if (!file) return;
+  const session = editorSession;
+  const request = ++photoRequest;
+  const status = byId("photo-status");
+  byId("save-product").disabled = true;
+  status.textContent = "Fotoğraf hazırlanıyor…";
+  try {
+    const photo = await preparePhoto(file);
+    if (session !== editorSession || request !== photoRequest) return;
+    productPhoto = photo;
+    renderProductPhoto();
+    status.textContent = "Fotoğraf hazır.";
+  } catch (error) {
+    if (session !== editorSession || request !== photoRequest) return;
+    status.textContent = error.message;
+    field.value = "";
+  } finally {
+    if (session === editorSession && request === photoRequest) byId("save-product").disabled = false;
+  }
+});
+byId("remove-photo").addEventListener("click", () => {
+  photoRequest++;
+  productPhoto = "";
+  byId("product-photo").value = "";
+  byId("photo-status").textContent = "Fotoğraf kaldırıldı.";
+  byId("save-product").disabled = false;
+  renderProductPhoto();
+});
+byId("set-product-location").addEventListener("click", async event => {
+  const button = event.currentTarget;
+  const session = editorSession;
+  const status = byId("product-location-status");
+  button.disabled = true;
+  byId("clear-product-location").disabled = true;
+  status.textContent = "Konum alınıyor…";
+  try {
+    const point = await getDeviceLocation();
+    if (session !== editorSession) return;
+    productPoint = point;
+    renderProductPoint();
+  } catch (error) {
+    if (session === editorSession) status.textContent = error.message;
+  } finally {
+    if (session === editorSession) {
+      button.disabled = false;
+      byId("clear-product-location").disabled = false;
+    }
+  }
+});
+byId("clear-product-location").addEventListener("click", () => {
+  productPoint = null;
+  renderProductPoint();
+});
 byId("cart-button").addEventListener("click", () => byId("cart-dialog").showModal());
 byId("new-product").addEventListener("click", () => openProduct());
 document.addEventListener("click", event => {
@@ -157,6 +354,7 @@ document.addEventListener("click", event => {
 byId("product-form").addEventListener("submit", event => {
   event.preventDefault();
   const fields = Object.fromEntries(new FormData(event.currentTarget));
+  if (byId("save-product").disabled || byId("set-product-location").disabled) return;
   const name = fields.name.trim();
   const maker = fields.maker.trim();
   const details = fields.details.trim();
@@ -164,7 +362,8 @@ byId("product-form").addEventListener("submit", event => {
   const next = structuredClone(state);
   const existing = next.products.find(p => p.id === fields.id);
   const product = {id: existing?.id ?? uid(), name, maker, details, category: fields.category,
-    price: Number(fields.price), stock: Number(fields.stock), visual: existing?.category === fields.category ? existing.visual : icon[fields.category]};
+    district: (fields.district ?? "").trim(), neighborhood: (fields.neighborhood ?? "").trim(),
+    point: productPoint, photo: productPhoto, price: Number(fields.price), stock: Number(fields.stock), visual: existing?.category === fields.category ? existing.visual : icon[fields.category]};
   if (existing) Object.assign(existing, product);
   else next.products.unshift(product);
   if (update(next, "Ürün kaydedildi")) byId("product-dialog").close();

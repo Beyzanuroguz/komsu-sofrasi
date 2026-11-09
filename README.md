@@ -11,3 +11,10 @@ Ev yapımı yemek, tatlı ve hamur işleri için Türkçe sipariş prototipi.
 3. **Keşfet → Siparişlerim** bölümünde güncellenen durumu kontrol et.
 
 Örnek ürünler, sepet ve siparişler tarayıcının yerel depolamasında saklanır. Müşteri ve üretici ekranı aynı tarayıcıdaki ortak demo verisini kullanır. Gerçek kullanıcı hesapları, ortak veritabanı, ödeme, mesaj bildirimleri ve teslimat entegrasyonu sonraki sürümün kapsamıdır.
+
+
+## Fotoğraf ve konum
+
+- Üretici panelinde bir ürün eklerken veya düzenlerken JPG, PNG ya da WebP yükleyebilirsin. Fotoğraf tarayıcıda küçültülür ve ürünle birlikte saklanır.
+- İlçe ve mahalleye göre aramayı denemek için Kadıköy, Kuzguncuk veya Beşiktaş yaz. Hazır ürünler İstanbul’daki örnek bölgeleri kullanır.
+- Üretici teslim noktasındayken cihaz konumunu ürüne ekleyebilir. Müşteri **Konumumu kullan** seçeneğiyle 2, 5, 10 veya 25 km içinde kalan ürünleri kuş uçuşu mesafeye göre sıralayabilir. Konum izni için HTTPS veya localhost gerekir.

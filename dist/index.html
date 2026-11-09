@@ -21,6 +21,12 @@
 </div>
 <section id="menu" aria-labelledby="menu-title">
 <div class="section-title"><div><span class="eyebrow">SOFRADA NE VAR?</span><h2 id="menu-title">Ev yapımı lezzetler</h2></div><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" aria-label="Ürün veya üretici ara" placeholder="Ürün veya üretici ara"></label></div>
+<div class="location-box">
+<div class="location-intro"><span class="location-mark" aria-hidden="true">⌖</span><div><strong>Yakınındaki lezzetler</strong><p class="muted" id="location-status" role="status">İlçe veya mahalle yaz ya da cihaz konumunu kullan.</p></div></div>
+<div class="location-controls"><label><span class="sr-only">İlçe veya mahalle</span><input id="area-search" type="search" placeholder="İlçe veya mahalle"></label>
+<label id="radius-label" hidden><span class="sr-only">Arama yarıçapı</span><select id="radius"><option value="2">2 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="25">25 km</option></select></label>
+<button type="button" class="pill" id="nearby" aria-pressed="false">Konumumu kullan</button></div>
+</div>
 <div class="filters" id="filters" aria-label="Ürün kategorileri"></div>
 <p class="muted" id="results" aria-live="polite"></p>
 <div id="catalog" class="cards"></div>
@@ -51,7 +57,15 @@
 <label>Kategori<select name="category" id="categories"></select></label>
 <div class="fields"><label>Fiyat (₺)<input type="number" name="price" min="1" max="100000" step="0.01" required></label><label>Stok (adet)<input type="number" name="stock" min="0" max="9999" step="1" required></label></div>
 <label>Açıklama ve alerjen bilgisi<textarea name="details" rows="3" maxlength="240" required></textarea></label>
-<button class="button wide">Ürünü kaydet</button>
+<label>Ürün fotoğrafı<input type="file" id="product-photo" accept="image/jpeg,image/png,image/webp"></label>
+<div id="photo-row" class="photo-row" hidden><img id="photo-preview" alt="Ürün fotoğrafı önizlemesi"><button type="button" class="pill" id="remove-photo">Fotoğrafı kaldır</button></div>
+<p id="photo-status" class="muted form-note" role="status">JPG, PNG veya WebP · En fazla 12 MB</p>
+<fieldset class="product-location"><legend>Teslim bölgesi</legend>
+<div class="fields"><label>İlçe<input name="district" maxlength="55" placeholder="Örn. Kadıköy"></label><label>Mahalle<input name="neighborhood" maxlength="55" placeholder="Örn. Moda"></label></div>
+<div class="location-actions"><button type="button" class="pill" id="set-product-location">Şu anki konumu ekle</button><button type="button" class="pill" id="clear-product-location" hidden>Konumu kaldır</button></div>
+<p id="product-location-status" class="muted form-note" role="status">Yakındaki aramalarda çıkmak için teslim noktasında konum ekleyebilirsin.</p>
+</fieldset>
+<button class="button wide" id="save-product">Ürünü kaydet</button>
 </form>
 </dialog>
 <div id="toast" role="status" aria-live="polite"></div>
